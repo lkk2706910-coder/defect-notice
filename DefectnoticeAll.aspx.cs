@@ -129,7 +129,7 @@ ORDER BY [DataDate] DESC;
                     var sec = r["Section"];
                     var dd = r["DataDate"] ?? "";
                     var rawEqpid = r["EQPID"] ?? "";
-                    bool isP56 = rawEqpid.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
+                    bool isP56 = IsDashP56(rawEqpid);
 
                     DateTime parsed;
                     if (!DateTime.TryParse(dd, out parsed)) continue;
@@ -225,7 +225,7 @@ ORDER BY [DataDate] DESC;
                     string d = parsed.Date.ToString("yyyy-MM-dd");
 
                     string tool = NormalizeEqpid(sec, eqpidRaw) ?? "";
-                    bool isP56 = eqpidRaw.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
+                    bool isP56 = IsDashP56(eqpidRaw);
 
                     if (!firstPerf) js.Append(",");
                     firstPerf = false;
@@ -264,7 +264,7 @@ ORDER BY [DataDate] DESC;
                     string wk = isoYear.ToString() + "W" + isoWeek.ToString("D02");
 
                     string tool = NormalizeEqpid(sec, eqpidRaw) ?? "";
-                    bool isP56 = eqpidRaw.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
+                    bool isP56 = IsDashP56(eqpidRaw);
 
                     if (!firstEq) js.Append(",");
                     firstEq = false;
@@ -383,7 +383,7 @@ ORDER BY [DataDate] DESC;
                     string sec = r["Section"];
                     string eqpidRaw = r["EQPID"] ?? "";
                     string child = NormalizeEqpid(sec, eqpidRaw);
-                    bool isP56 = eqpidRaw.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
+                    bool isP56 = IsDashP56(eqpidRaw);
 
                     // 兩個 key：parent=sec、child=child
                     foreach (var key in new[] { sec, child })
@@ -601,7 +601,7 @@ ORDER BY [DataDate] DESC;
                         int vP56 = 0;
                         foreach (var kv in monthCountsLevel2[sec])
                         {
-                            bool isP56 = kv.Key.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
+                            bool isP56 = IsDashP56(kv.Key);
                             int vv;
                             if (!kv.Value.TryGetValue(ym, out vv)) vv = 0;
                             if (isP56) vP56 += vv;
@@ -845,7 +845,7 @@ ORDER BY [DataDate] DESC;
                         // 讓右邊卡片可被「ULKCVD-04」這種子分類過濾 + FAB(P56)
                         string rawEqpid = row["EQPID"] ?? "";
                         string normEqpid = NormalizeEqpid(section, rawEqpid);
-                        bool isP56 = rawEqpid.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
+                        bool isP56 = IsDashP56(rawEqpid);
 
                         sb.Append("<div class='item' data-parent-section='")
                           .Append(Server.HtmlEncode(section))
@@ -2460,6 +2460,33 @@ ORDER BY [DataDate] DESC;
     }
 
     // ===== Helpers =====
+
+    // Dashboard FAB classification (explicit EQPID lists provided by user)
+    // P14: SACVD-01,03,04,05,06,A01~A09 ; NISACVD-01~06,A01~A14
+    // P56: SACVD-B01~B11,B81 ; NISACVD-B01~B14
+    // A row counts as P56 iff any ^-separated token is in DashP56Eqpids; otherwise P14.
+    private static readonly System.Collections.Generic.HashSet<string> DashP56Eqpids =
+        new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // SACVD P56
+            "SACVD-B01","SACVD-B02","SACVD-B03","SACVD-B04","SACVD-B05","SACVD-B06",
+            "SACVD-B07","SACVD-B08","SACVD-B09","SACVD-B10","SACVD-B11","SACVD-B81",
+            // NISACVD P56
+            "NISACVD-B01","NISACVD-B02","NISACVD-B03","NISACVD-B04","NISACVD-B05",
+            "NISACVD-B06","NISACVD-B07","NISACVD-B08","NISACVD-B09","NISACVD-B10",
+            "NISACVD-B11","NISACVD-B12","NISACVD-B13","NISACVD-B14",
+        };
+
+    private static bool IsDashP56(string eqpid)
+    {
+        if (string.IsNullOrEmpty(eqpid)) return false;
+        var tokens = eqpid.Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            if (DashP56Eqpids.Contains((tokens[i] ?? "").Trim())) return true;
+        }
+        return false;
+    }
 
     // ISO week helper (compatible with .NET 4.x)
     private static void GetIsoWeekYear(DateTime date, out int isoYear, out int isoWeek)
