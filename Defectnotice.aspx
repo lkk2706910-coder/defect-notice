@@ -405,10 +405,8 @@
 
                         <div class="pill">
                             <span class="chip">EQPID:</span>
-                            <label class="chip"><input type="checkbox" class="eqpid" value="ULKCVD" checked /> ULKCVD</label>
-                            <label class="chip"><input type="checkbox" class="eqpid" value="TEOSPE" checked /> TEOSPE</label>
-                            <label class="chip"><input type="checkbox" class="eqpid" value="APF" checked /> APF</label>
-                            <label class="chip"><input type="checkbox" class="eqpid" value="BLOKCVD" checked /> BLOKCVD</label>
+                            <label class="chip"><input type="checkbox" class="eqpid" value="NISACVD" checked /> NISACVD</label>
+                            <label class="chip"><input type="checkbox" class="eqpid" value="SACVD" checked /> SACVD</label>
                         </div>
 
                         <div class="pill">
@@ -447,20 +445,12 @@
                     <div class="section-title">Tool distribution (pie, per section)</div>
                     <div style="padding:10px 12px; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px;">
                         <div class="section" style="margin:0;">
-                            <div class="section-title" id="pie_title_ULKCVD">ULKCVD</div>
-                            <div style="padding:10px 12px; height:260px;"><canvas id="pie_ULKCVD"></canvas></div>
+                            <div class="section-title" id="pie_title_NISACVD">NISACVD</div>
+                            <div style="padding:10px 12px; height:260px;"><canvas id="pie_NISACVD"></canvas></div>
                         </div>
                         <div class="section" style="margin:0;">
-                            <div class="section-title" id="pie_title_TEOSPE">TEOSPE</div>
-                            <div style="padding:10px 12px; height:260px;"><canvas id="pie_TEOSPE"></canvas></div>
-                        </div>
-                        <div class="section" style="margin:0;">
-                            <div class="section-title" id="pie_title_APF">APF</div>
-                            <div style="padding:10px 12px; height:260px;"><canvas id="pie_APF"></canvas></div>
-                        </div>
-                        <div class="section" style="margin:0;">
-                            <div class="section-title" id="pie_title_BLOKCVD">BLOKCVD</div>
-                            <div style="padding:10px 12px; height:260px;"><canvas id="pie_BLOKCVD"></canvas></div>
+                            <div class="section-title" id="pie_title_SACVD">SACVD</div>
+                            <div style="padding:10px 12px; height:260px;"><canvas id="pie_SACVD"></canvas></div>
                         </div>
                     </div>
                 </div>
@@ -506,19 +496,17 @@
 
                     // chartData / tool performance / eq-week chart 由後端塞入 window.__trendData / window.__perfRows / window.__eqChartRows
                     // 新格式：seriesAll/seriesP14/seriesP56；舊格式：series
-                    const trend = window.__trendData || { labels: [], series: { ULKCVD: [], TEOSPE: [], APF: [], BLOKCVD: [] } };
+                    const trend = window.__trendData || { labels: [], series: { NISACVD: [], SACVD: [] } };
                     try { console.log('trend labels', (trend.labels||[]).length, 'perfRows', (window.__perfRows||[]).length, 'eqChartRows', (window.__eqChartRows||[]).length); } catch (e) { }
-                    const perfRows = window.__perfRows || []; // [{d:'yyyy-MM-dd', sec:'ULKCVD', tool:'ULKCVD-04', isP56:0/1}]
-                    const eqChartRows = window.__eqChartRows || []; // [{wk:'2026W08', sec:'ULKCVD', tool:'ULKCVD-04', toolShort:'U-04', isP56:0/1}]
+                    const perfRows = window.__perfRows || []; // [{d:'yyyy-MM-dd', sec:'NISACVD', tool:'NISACVD-04', isP56:0/1}]
+                    const eqChartRows = window.__eqChartRows || []; // [{wk:'2026W08', sec:'NISACVD', tool:'NISACVD-04', toolShort:'N-04', isP56:0/1}]
 
                     const ctx = document.getElementById('trendChart');
                     const ctxEq = document.getElementById('eqWeekChart');
                     if (!ctx || !ctxEq) { try { console.error('canvas missing', {trendChart:!!ctx, eqWeekChart:!!ctxEq}); } catch (e) {} }
                     const colors = {
-                        ULKCVD: 'rgba(255, 159, 64, 0.9)',
-                        TEOSPE: 'rgba(54, 162, 235, 0.9)',
-                        APF: 'rgba(75, 192, 192, 0.9)',
-                        BLOKCVD: 'rgba(153, 102, 255, 0.9)'
+                        NISACVD: 'rgba(255, 159, 64, 0.9)',
+                        SACVD: 'rgba(54, 162, 235, 0.9)'
                     };
 
                     const makeDataset = (k) => ({
@@ -536,7 +524,7 @@
                         type: chartType,
                         data: {
                             labels: trend.labels,
-                            datasets: ['ULKCVD', 'TEOSPE', 'APF', 'BLOKCVD'].map(makeDataset)
+                            datasets: ['NISACVD', 'SACVD'].map(makeDataset)
                         },
                         options: {
                             responsive: true,
@@ -779,7 +767,7 @@
                         });
                     }
 
-                    let activeSubEqpid = null; // e.g. ULKCVD-04
+                    let activeSubEqpid = null; // e.g. NISACVD-04
 
                     function setChartType(t) {
                         chartType = t;
@@ -816,7 +804,7 @@
                         const fab = getFabValue();
                         const startDate = getRangeStartDate();
 
-                        const order = ['ULKCVD', 'TEOSPE', 'APF', 'BLOKCVD'];
+                        const order = ['NISACVD', 'SACVD'];
                         const palette = ['#60a5fa', '#f87171', '#fbbf24', '#34d399', '#a78bfa', '#fb7185', '#22c55e', '#38bdf8', '#f97316', '#e879f9', '#94a3b8', '#f43f5e', '#10b981'];
 
                         for (const sec of order) {
@@ -1157,7 +1145,7 @@
                         const secTotal = new Map();
 
                         // ensure fixed sections exist
-                        ['ULKCVD', 'TEOSPE', 'APF', 'BLOKCVD'].forEach(s => {
+                        ['NISACVD', 'SACVD'].forEach(s => {
                             if (!secMap.has(s)) secMap.set(s, new Map());
                             if (!secTotal.has(s)) secTotal.set(s, 0);
                         });
@@ -1197,7 +1185,7 @@
                         if (!tbody) return;
 
                         const { secMap, secTotal } = calcPerfBySection();
-                        const secOrder = ['ULKCVD', 'TEOSPE', 'APF', 'BLOKCVD'];
+                        const secOrder = ['NISACVD', 'SACVD'];
 
                         let html = '';
                         const maxShowPerSec = 30;

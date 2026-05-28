@@ -184,7 +184,7 @@ ORDER BY [DataDate] DESC;
                     monthSet.Add(monthKey);
 
                     string eqpidRaw = r["EQPID"] ?? "";
-                    string eqpid = NormalizeEqpid(section, eqpidRaw) ?? eqpidRaw;
+                    string eqpid = NormalizeEqpid(r["Section"], eqpidRaw) ?? eqpidRaw;
                     if (string.IsNullOrWhiteSpace(eqpid)) continue;
                     eqpSet.Add(eqpid);
 
@@ -237,7 +237,7 @@ ORDER BY [DataDate] DESC;
                         string monthKey = dd.ToString("yyyy-MM");
 
                         string eqpidRaw = r["EQPID"] ?? "";
-                        string eqpid = NormalizeEqpid(section, eqpidRaw) ?? eqpidRaw;
+                        string eqpid = NormalizeEqpid(r["Section"], eqpidRaw) ?? eqpidRaw;
                         if (string.IsNullOrWhiteSpace(eqpid)) continue;
 
                         bool isP56 = eqpidRaw.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
