@@ -675,7 +675,7 @@
                 <div class="tab-bar">
                     <button type="button" class="tab-btn active" data-tab="Dash">主看版</button>
                     <button type="button" class="tab-btn" data-tab="Notice24">24hr Notice</button>
-                    <button type="button" class="tab-btn" data-tab="Pivot">Pivot 分析</button>
+                    <button type="button" class="tab-btn" data-tab="Pivot">Defect Notice pattern 分析</button>
                     <button type="button" id="themeToggle" class="theme-toggle" title="切換深色 / 淺色模式" aria-label="Toggle theme">
                         <span class="theme-toggle-icon"></span>
                         <span class="theme-toggle-label"></span>
