@@ -251,6 +251,18 @@
             font-weight: 800;
         }
 
+        /* EQPID 可點擊連結：點擊展開同 LOT ID 的其他機台 */
+        .eqpid-link {
+            color: var(--text);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .eqpid-link.eqpid-dup {
+            color: #ffd166;
+            font-weight: 800;
+        }
+        .eqpid-link:hover { text-decoration: underline; }
+
         /* 週表子列數字 >=3 變紅（會跟著 FAB 切換，JS 會動態加/移除） */
         .hot {
             color: #ff5d5d;
@@ -1337,6 +1349,18 @@
                         syncVisibility();
                     });
 
+                    // EQPID 點擊：toggle 「其他機台」清單顯示（同 LOT ID 的非 NISACVD/SACVD 機台）
+                    document.addEventListener('click', (ev) => {
+                        const a = ev.target && ev.target.closest ? ev.target.closest('a.eqpid-link') : null;
+                        if (!a) return;
+                        const item = a.closest('.item');
+                        if (!item) return;
+                        const other = item.querySelector('.other-tools');
+                        if (!other) return;
+                        const shown = other.style.display && other.style.display !== 'none';
+                        other.style.display = shown ? 'none' : 'block';
+                    });
+
                     // reset filters to initial defaults
                     document.getElementById('btnReset')?.addEventListener('click', () => {
                         // FAB default = ALL
@@ -1369,6 +1393,9 @@
 
                         // collapse expanded cards
                         document.querySelectorAll('.item.expanded').forEach(el => el.classList.remove('expanded'));
+
+                        // collapse other-tools panels
+                        document.querySelectorAll('.other-tools').forEach(el => { el.style.display = 'none'; });
 
                         syncVisibility();
                     });

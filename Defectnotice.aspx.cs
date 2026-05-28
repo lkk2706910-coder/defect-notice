@@ -141,6 +141,69 @@ ORDER BY [DataDate] DESC;
                     rows.Add(d);
                 }
 
+                // ===== 其他機台查詢：抓出同 LOT ID 在 DB 內、非 NISACVD/SACVD 的機台 =====
+                var lotOtherTools = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+                var lotIdsForQuery = new System.Collections.Generic.List<string>();
+                {
+                    var seenLot = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var r in rows)
+                    {
+                        string lot = (r["LOTID"] ?? "").Trim();
+                        if (string.IsNullOrEmpty(lot)) continue;
+                        if (seenLot.Add(lot)) lotIdsForQuery.Add(lot);
+                    }
+                }
+
+                if (lotIdsForQuery.Count > 0)
+                {
+                    var paramNames = new System.Collections.Generic.List<string>();
+                    for (int i = 0; i < lotIdsForQuery.Count; i++) paramNames.Add("@lotq" + i);
+
+                    string sqlOther = "SELECT TOP (5000) LOTID, EQPID FROM [GPTPoCDB].[dbo].[_DefectNotice_FAB] " +
+                                      "WHERE LOTID IN (" + string.Join(",", paramNames.ToArray()) + ") " +
+                                      "AND DataDate >= @StartDate2 AND DataDate < @EndDate2";
+
+                    using (SqlConnection conn2 = new SqlConnection(connStr))
+                    using (SqlCommand cmd2 = new SqlCommand(sqlOther, conn2))
+                    {
+                        for (int i = 0; i < lotIdsForQuery.Count; i++)
+                            cmd2.Parameters.AddWithValue(paramNames[i], lotIdsForQuery[i]);
+                        cmd2.Parameters.AddWithValue("@StartDate2", new DateTime(2025, 1, 1));
+                        cmd2.Parameters.AddWithValue("@EndDate2", new DateTime(2027, 1, 1));
+
+                        conn2.Open();
+                        using (SqlDataReader rdr2 = cmd2.ExecuteReader())
+                        {
+                            int oLot = rdr2.GetOrdinal("LOTID");
+                            int oEqp = rdr2.GetOrdinal("EQPID");
+
+                            while (rdr2.Read())
+                            {
+                                string lid = rdr2.IsDBNull(oLot) ? "" : (rdr2.GetValue(oLot) ?? "").ToString();
+                                string eid = rdr2.IsDBNull(oEqp) ? "" : (rdr2.GetValue(oEqp) ?? "").ToString();
+                                if (string.IsNullOrEmpty(lid) || string.IsNullOrEmpty(eid)) continue;
+
+                                string[] parts = eid.Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries);
+                                for (int pi = 0; pi < parts.Length; pi++)
+                                {
+                                    string p = parts[pi].Trim();
+                                    if (p.Length == 0) continue;
+                                    if (p.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)) continue;
+                                    if (p.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase)) continue;
+
+                                    System.Collections.Generic.HashSet<string> set;
+                                    if (!lotOtherTools.TryGetValue(lid, out set))
+                                    {
+                                        set = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                        lotOtherTools[lid] = set;
+                                    }
+                                    set.Add(p);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // ===== Trend data: count by DataDate (yyyy-MM-dd), per section =====
                 DateTime minDate = DateTime.MaxValue;
                 DateTime maxDate = DateTime.MinValue;
@@ -913,16 +976,15 @@ ORDER BY [DataDate] DESC;
 
                             int c;
                             bool dup = recentEqpidCount.TryGetValue(p, out c) && c >= 2;
-                            if (dup)
-                            {
-                                eqSb.Append("<span class='eqpid-dup'>")
-                                    .Append(Server.HtmlEncode(p))
-                                    .Append("</span>");
-                            }
-                            else
-                            {
-                                eqSb.Append(Server.HtmlEncode(p));
-                            }
+                            string encodedP = Server.HtmlEncode(p);
+                            string clsAttr = dup ? "eqpid-link eqpid-dup" : "eqpid-link";
+                            eqSb.Append("<a href='javascript:void(0)' class='")
+                                .Append(clsAttr)
+                                .Append("' data-eqpid='")
+                                .Append(encodedP)
+                                .Append("'>")
+                                .Append(encodedP)
+                                .Append("</a>");
                         }
                         string eqpidDisplay = eqSb.ToString();
 
@@ -940,6 +1002,28 @@ ORDER BY [DataDate] DESC;
                           .Append(eqpidDisplay)
                           .Append("</div>")
                           .Append("</div>");
+
+                        // 其他機台清單（同 LOT ID、非 NISACVD/SACVD），點擊 EQPID 後展開
+                        string lotidForOther = row["LOTID"] ?? "";
+                        System.Collections.Generic.HashSet<string> otherTools;
+                        if (!string.IsNullOrEmpty(lotidForOther)
+                            && lotOtherTools.TryGetValue(lotidForOther, out otherTools)
+                            && otherTools.Count > 0)
+                        {
+                            var sortedTools = new System.Collections.Generic.List<string>(otherTools);
+                            sortedTools.Sort(StringComparer.OrdinalIgnoreCase);
+
+                            sb.Append("<div class='other-tools' style='display:none; padding:6px 12px 0; font-size:12px; color:var(--muted);'>")
+                              .Append("Other tools for LOT ")
+                              .Append(Server.HtmlEncode(lotidForOther))
+                              .Append(": ");
+                            for (int oi = 0; oi < sortedTools.Count; oi++)
+                            {
+                                if (oi > 0) sb.Append(", ");
+                                sb.Append(Server.HtmlEncode(sortedTools[oi]));
+                            }
+                            sb.Append("</div>");
+                        }
 
                         // detail (hidden by default, click to expand)
                         sb.Append("<div class='item-detail'>");
