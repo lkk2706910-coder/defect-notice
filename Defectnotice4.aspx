@@ -743,16 +743,6 @@
                                         document.querySelectorAll('input.pivotmode').forEach(rb => rb.addEventListener('change', syncVisibility));
 
 
-
-                    // Counts Month/Week 會有兩份（month表/ week表），用事件委派避免漏綁
-                    document.addEventListener('change', (ev) => {
-                        const t = ev.target;
-                        if (t && t.classList && t.classList.contains('countgrain')) {
-                            syncVisibility();
-                        }
-                    });
-
-
                                         // Search：打字即時觸發過濾
                     const qLotEl = document.getElementById('qLot');
                     const qEqpEl = document.getElementById('qEqp');
@@ -779,27 +769,7 @@
                     });
 
 
-                                        // 置頂公告點擊：只影響下方資料表（不改變置頂清單的顯示）
-                                        document.addEventListener('click', (ev) => {
-                                            const a = ev.target && ev.target.closest ? ev.target.closest('a.notice-link[data-tool]') : null;
-                                            if (!a) return;
-                                            const tool = a.getAttribute('data-tool') || '';
-
-                                            activeSubEqpid = null;
-
-                                            const input = document.getElementById('qEqp');
-                                            if (input) {
-                                                const cur = (input.value || '').trim();
-                                                if (cur.toLowerCase() === tool.toLowerCase()) input.value = '';
-                                                else input.value = tool;
-                                            }
-
-                                            // only refresh bottom table; keep notice list as-is
-                                            applyCardFilter();
-                                        });
-
-
-                                        // Jump buttons: click to filter by tool prefix (e.g. TEOSPE-)
+                                        // Jump buttons: click to filter by tool prefix (e.g. NISACVD-)
                                         document.addEventListener('click', (ev) => {
                                             const btn = ev.target && ev.target.closest ? ev.target.closest('button.jump[data-toolprefix]') : null;
                                             if (!btn) return;
@@ -823,6 +793,9 @@
                                         document.getElementById('btnReset')?.addEventListener('click', () => {
                                             // FAB default = ALL
                                             document.querySelectorAll('input.fab').forEach(rb => { rb.checked = (rb.value === 'ALL'); });
+
+                                            // Pivot mode default = GROUP
+                                            document.querySelectorAll('input.pivotmode').forEach(rb => { rb.checked = (rb.value === 'GROUP'); });
 
                                             // clear search
                                             const qLotEl = document.getElementById('qLot');

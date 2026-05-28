@@ -663,16 +663,6 @@
                                         document.querySelectorAll('input.fab').forEach(rb => rb.addEventListener('change', syncVisibility));
 
 
-
-                    // Counts Month/Week 會有兩份（month表/ week表），用事件委派避免漏綁
-                    document.addEventListener('change', (ev) => {
-                        const t = ev.target;
-                        if (t && t.classList && t.classList.contains('countgrain')) {
-                            syncVisibility();
-                        }
-                    });
-
-
                                         // Search：打字即時觸發過濾
                     const qLotEl = document.getElementById('qLot');
                     const qEqpEl = document.getElementById('qEqp');
@@ -703,7 +693,7 @@
                                         });
 
 
-                                        // Jump buttons: click to filter by tool prefix (e.g. TEOSPE-)
+                                        // Jump buttons: click to filter by tool prefix (e.g. NISACVD-)
                                         document.addEventListener('click', (ev) => {
                                             const btn = ev.target && ev.target.closest ? ev.target.closest('button.jump[data-toolprefix]') : null;
                                             if (!btn) return;
