@@ -49,11 +49,11 @@
             --input-bg-strong: rgba(5, 10, 20, 0.92);
             --accent-soft: #93c5fd;
             /* Amber/warning palette (high contrast on dark) */
-            --notice-bg: rgba(251, 191, 36, 0.10);
-            --notice-border: rgba(251, 191, 36, 0.45);
+            --notice-bg: rgba(251, 191, 36, 0.08);
+            --notice-border: rgba(251, 191, 36, 0.40);
             --notice-title: #fbbf24;
-            --notice-chip-bg: rgba(251, 191, 36, 0.14);
-            --notice-chip-hover-bg: rgba(251, 191, 36, 0.24);
+            --notice-chip-bg: var(--panel-elevated);
+            --notice-chip-hover-bg: rgba(251, 191, 36, 0.18);
             --eqpid-dup: #fbbf24;
             --hot: #fca5a5;
         }
@@ -85,12 +85,12 @@
             --input-bg: rgba(255, 255, 255, 0.80);
             --input-bg-strong: rgba(255, 255, 255, 0.95);
             --accent-soft: #1e40af;
-            /* Amber/warning palette (dark text on amber-100 bg, WCAG AA) */
-            --notice-bg: #fef3c7;
+            /* Amber/warning palette — soft amber-50 bg, white chips pop out (Tailwind/Bootstrap-style alert) */
+            --notice-bg: #fffbeb;
             --notice-border: #f59e0b;
             --notice-title: #92400e;
-            --notice-chip-bg: #fef3c7;
-            --notice-chip-hover-bg: #fde68a;
+            --notice-chip-bg: #ffffff;
+            --notice-chip-hover-bg: #fef3c7;
             --eqpid-dup: #b45309;
             --hot: #b91c1c;
         }
