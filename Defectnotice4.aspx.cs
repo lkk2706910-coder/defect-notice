@@ -837,13 +837,15 @@ ORDER BY [DataDate] DESC;
                             titleHtml = Server.HtmlEncode(titleText);
                         }
 
-                        // EQPID multi-line display (like screenshot)
+                        // EQPID multi-line display: only keep NISACVD-/SACVD- tokens
                         string[] eqParts = (row["EQPID"] ?? "").Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries);
                         var eqSb = new StringBuilder();
                         for (int i = 0; i < eqParts.Length; i++)
                         {
                             string p = eqParts[i].Trim();
                             if (p.Length == 0) continue;
+                            if (!p.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)
+                                && !p.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase)) continue;
                             if (eqSb.Length > 0) eqSb.Append("\n");
 
                             int c;

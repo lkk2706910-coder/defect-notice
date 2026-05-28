@@ -900,13 +900,15 @@ ORDER BY [DataDate] DESC;
                             docBtn = "<span class='btn' style='opacity:.45; cursor:not-allowed;'>No DOCURL</span>";
                         }
 
-                        // EQPID 顯示：以 ^ 分行（不排序），若近一個月內重複則標色
+                        // EQPID 顯示：以 ^ 分行，僅保留 NISACVD-/SACVD- 開頭的 token，若近一個月內重複則標色
                         string[] eqParts = (row["EQPID"] ?? "").Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries);
                         var eqSb = new StringBuilder();
                         for (int i = 0; i < eqParts.Length; i++)
                         {
                             string p = eqParts[i].Trim();
                             if (p.Length == 0) continue;
+                            if (!p.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)
+                                && !p.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase)) continue;
                             if (eqSb.Length > 0) eqSb.Append("<br/>");
 
                             int c;
