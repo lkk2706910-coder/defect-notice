@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data.SqlClient;
 using System.Text;
 using System.Web.UI.WebControls;
@@ -17,7 +17,7 @@ public partial class DefectnoticeAll : System.Web.UI.Page
     {
         string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
 
-        // 依需求：只分 4 區（ULKCVD/TEOSPE/APF/BLOKCVD），且不需要左右捲動（改成卡片式直向列表）
+        // Per spec: 4 sections (ULKCVD/TEOSPE/APF/BLOKCVD), card-style vertical list
         string sql = @"
 SELECT TOP (1000)
     [DataDate],
@@ -693,7 +693,7 @@ ORDER BY [DataDate] DESC;
                 }
 
                 // ===== 置頂公告 A：近 1 週內重複出現的機台（count>=2） =====
-                // 只保留四大機群 (ULKCVD/APF/TEOSPE/BLOKCVD)
+                // Keep only the 4 main groups (ULKCVD/APF/TEOSPE/BLOKCVD)
                 var dupList = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, int>>();
                 foreach (var kv in recentEqpidCount)
                 {
@@ -953,7 +953,7 @@ ORDER BY [DataDate] DESC;
     {
         string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
 
-                // 依需求：機群（ULKCVD/TEOSPE/APF/BLOKCVD/NISACVD/SACVD）
+                // Per spec: groups (ULKCVD/TEOSPE/APF/BLOKCVD/NISACVD/SACVD)
         string sql = @"
 SELECT TOP (1000)
     [DataDate],
@@ -1570,7 +1570,7 @@ ORDER BY [DataDate] DESC;
     {
         string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
 
-                // 依需求：機群（ALDOX/CULKCVD/CUSILPE/DARC/HKG/SILPE）
+                // Per spec: groups (ALDOX/CULKCVD/CUSILPE/DARC/HKG/SILPE)
         string sql = @"
 SELECT TOP (1000)
     [DataDate],
@@ -2187,7 +2187,7 @@ ORDER BY [DataDate] DESC;
     {
         string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
 
-                // 依需求：只抓 ULKCVD
+                // Per spec: ULKCVD only
         string sql = @"
 SELECT TOP (5000)
     [DataDate],
