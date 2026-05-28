@@ -1636,6 +1636,23 @@ ORDER BY [DataDate] DESC;
                     string eqpid = reader.IsDBNull(ordEqpId) ? "" : reader.GetValue(ordEqpId).ToString();
                     string section = GetSectionFromEqpid(eqpid);
                     if (section == null) continue;
+                    // For multi-tool rows where SACVD/NISACVD is sharing with ULKCVD/TEOSPE/etc,
+                    // GetSectionFromEqpid prefers the longer-prefix non-SACVD section and we end
+                    // up here with section like "ULKCVD". Force the section to SACVD/NISACVD if
+                    // any token starts with one of those, so the Pivot tables stay on-spec.
+                    if (!string.Equals(section, "SACVD", StringComparison.Ordinal) &&
+                        !string.Equals(section, "NISACVD", StringComparison.Ordinal))
+                    {
+                        string forced = null;
+                        foreach (var t in eqpid.Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            var tt = (t ?? "").Trim();
+                            if (tt.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)) { forced = "NISACVD"; break; }
+                            if (tt.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase)) { forced = "SACVD"; }
+                        }
+                        if (forced == null) continue;
+                        section = forced;
+                    }
 
                     // filter out excluded EQP IDs (supports multi-token EQPID like A^B^C)
                     bool hitExcluded = false;
