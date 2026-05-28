@@ -1676,7 +1676,7 @@
 <html><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Performance</title>
-<style>${pane.querySelector('style')?.innerHTML || ''}</style>
+<style>${Array.from(document.head.querySelectorAll('style')).map(s => s.innerHTML).join('\n')}</style>
 </head><body style="background: var(--bg); color: var(--text); margin:0;">
 <div class="container" style="max-width:1280px; margin:16px auto; padding:0 16px;">
   <div class="card">
