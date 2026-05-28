@@ -29,7 +29,10 @@
             --text: #e7eefc;
             --muted: #a9b7d6;
             --border: rgba(255,255,255,0.12);
-            --header: var(--tint-med);
+            --tint-low: rgba(255,255,255,0.03);
+            --tint-med: rgba(255,255,255,0.06);
+            --tint-high: rgba(255,255,255,0.10);
+            --header: rgba(255,255,255,0.06);
             --rowHover: rgba(99, 179, 237, 0.10);
             --chip: rgba(99, 179, 237, 0.18);
             --chip-active-bg: rgba(99, 179, 237, 0.22);
@@ -41,16 +44,18 @@
             --shadow: rgba(0,0,0,0.5);
             --placeholder-bg: #1e293b;
             --placeholder-text: #94a3b8;
-            --eqpid-dup: #ffb86b;
-            --notice-bg: rgba(255, 200, 0, 0.06);
-            --notice-border: rgba(255, 200, 0, 0.4);
-            --tint-low: var(--tint-low);
-            --tint-med: var(--tint-med);
-            --tint-high: var(--tint-high);
-            --surface-sticky: var(--surface-sticky);
-            --input-bg: var(--input-bg);
-            --input-bg-strong: var(--input-bg-strong);
+            --surface-sticky: rgba(10, 18, 32, 0.95);
+            --input-bg: rgba(5, 10, 20, 0.30);
+            --input-bg-strong: rgba(5, 10, 20, 0.92);
             --accent-soft: #93c5fd;
+            /* Amber/warning palette (high contrast on dark) */
+            --notice-bg: rgba(251, 191, 36, 0.10);
+            --notice-border: rgba(251, 191, 36, 0.45);
+            --notice-title: #fbbf24;
+            --notice-chip-bg: rgba(251, 191, 36, 0.14);
+            --notice-chip-hover-bg: rgba(251, 191, 36, 0.24);
+            --eqpid-dup: #fbbf24;
+            --hot: #fca5a5;
         }
 
         [data-theme="light"] {
@@ -73,9 +78,6 @@
             --shadow: rgba(0,0,0,0.08);
             --placeholder-bg: #e2e8f0;
             --placeholder-text: #64748b;
-            --eqpid-dup: #c2410c;
-            --notice-bg: rgba(245, 158, 11, 0.08);
-            --notice-border: rgba(245, 158, 11, 0.4);
             --tint-low: rgba(0,0,0,0.02);
             --tint-med: rgba(0,0,0,0.04);
             --tint-high: rgba(0,0,0,0.08);
@@ -83,6 +85,14 @@
             --input-bg: rgba(255, 255, 255, 0.80);
             --input-bg-strong: rgba(255, 255, 255, 0.95);
             --accent-soft: #1e40af;
+            /* Amber/warning palette (dark text on amber-100 bg, WCAG AA) */
+            --notice-bg: #fef3c7;
+            --notice-border: #f59e0b;
+            --notice-title: #92400e;
+            --notice-chip-bg: #fef3c7;
+            --notice-chip-hover-bg: #fde68a;
+            --eqpid-dup: #b45309;
+            --hot: #b91c1c;
         }
 
         html, body {
@@ -130,17 +140,18 @@
 
         .notice {
             margin-top: 10px;
-            border: 1px solid rgba(255, 209, 102, 0.35);
-            background: rgba(255, 209, 102, 0.10);
-            border-radius: 12px;
-            padding: 10px 12px;
+            border: 1px solid var(--notice-border);
+            border-left: 4px solid var(--notice-border);
+            background: var(--notice-bg);
+            border-radius: 8px;
+            padding: 10px 14px;
         }
 
         .notice-title {
             font-weight: 800;
             font-size: 12px;
             letter-spacing: .02em;
-            color: #ffd166;
+            color: var(--notice-title);
             margin-bottom: 6px;
         }
 
@@ -156,15 +167,15 @@
             gap: 6px;
             padding: 6px 10px;
             border-radius: 999px;
-            border: 1px solid rgba(255, 209, 102, 0.35);
-            background: rgba(255, 209, 102, 0.12);
+            border: 1px solid var(--notice-border);
+            background: var(--notice-chip-bg);
             color: var(--text);
             font-size: 12px;
             cursor: pointer;
             text-decoration: none;
         }
 
-        .notice-chip:hover { background: rgba(255, 209, 102, 0.18); }
+        .notice-chip:hover { background: var(--notice-chip-hover-bg); }
 
         /* notice table (like screenshot) */
         table.notice-table {
@@ -364,11 +375,13 @@
         }
 
         .section-title {
-            padding: 10px 12px;
+            padding: 10px 12px 10px 14px;
             font-weight: 800;
             letter-spacing: .02em;
             background: var(--tint-med);
             border-bottom: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            color: var(--text);
         }
 
         /* Search bar inside right-side section title */
@@ -430,18 +443,19 @@
         /* EQPID 若是空值時也要占位，避免看起來像消失 */
         .item-collapsed .eqpid:empty::after {
             content: "-";
-            color: rgba(169,183,214,0.6);
+            color: var(--muted);
+            opacity: 0.6;
         }
 
-        /* 近一個月內重複 EQPID 標色 */
+        /* Repeated EQPID within last month */
         .eqpid-dup {
-            color: #ffd166;
+            color: var(--eqpid-dup);
             font-weight: 800;
         }
 
-        /* 週表子列數字 >=3 變紅（會跟著 FAB 切換，JS 會動態加/移除） */
+        /* Weekly child row count >= 3 turns red (toggled per FAB by JS) */
         .hot {
-            color: #ff5d5d;
+            color: var(--hot);
             font-weight: 900;
         }
 
