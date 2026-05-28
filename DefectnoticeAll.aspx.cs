@@ -17,7 +17,7 @@ public partial class DefectnoticeAll : System.Web.UI.Page
     {
         string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
 
-        // Per spec: 4 sections (ULKCVD/TEOSPE/APF/BLOKCVD), card-style vertical list
+        // Per spec: 2 sections (SACVD/NISACVD), card-style vertical list
         string sql = @"
 SELECT TOP (1000)
     [DataDate],
@@ -36,10 +36,8 @@ SELECT TOP (1000)
 FROM [GPTPoCDB].[dbo].[_DefectNotice_FAB]
 WHERE
     (
-        EQPID LIKE 'TEOSPE-%' OR EQPID LIKE '%TEOSPE%'
-        OR EQPID LIKE 'ULKCVD-%' OR EQPID LIKE '%ULKCVD%'
-        OR EQPID LIKE 'APF-%' OR EQPID LIKE '%APF%'
-        OR EQPID LIKE 'BLOKCVD-%' OR EQPID LIKE '%BLOKCVD%'
+        EQPID LIKE 'SACVD-%' OR EQPID LIKE '%SACVD%'
+        OR EQPID LIKE 'NISACVD-%' OR EQPID LIKE '%NISACVD%'
     )
     AND DataDate >= @StartDate
     AND DataDate <  @EndDate
@@ -69,7 +67,7 @@ ORDER BY [DataDate] DESC;
                 int ordEqpId = reader.GetOrdinal("EQPID");
                 int ordDocUrl = reader.GetOrdinal("DOCURL");
 
-                var sections = new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" };
+                var sections = new[] { "SACVD", "NISACVD" };
                 var sb = new StringBuilder();
 
                 foreach (var section in sections)
@@ -120,7 +118,7 @@ ORDER BY [DataDate] DESC;
                 var trendP14 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
                 var trendP56 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
 
-                foreach (var sec0 in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                foreach (var sec0 in new[] { "SACVD", "NISACVD" })
                 {
                     trendAll.Add(sec0, new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
                     trendP14.Add(sec0, new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
@@ -177,10 +175,8 @@ ORDER BY [DataDate] DESC;
 
                 // ===== Weekly table: count by week (Mon-Sun), per section =====
                 var weeklyCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
-                weeklyCounts.Add("ULKCVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
-                weeklyCounts.Add("TEOSPE", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
-                weeklyCounts.Add("APF", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
-                weeklyCounts.Add("BLOKCVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                weeklyCounts.Add("SACVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                weeklyCounts.Add("NISACVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
 
                 foreach (var r in rows)
                 {
@@ -203,7 +199,7 @@ ORDER BY [DataDate] DESC;
                 }
 
                 var weekLabels = new System.Collections.Generic.SortedSet<string>(StringComparer.Ordinal);
-                foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                foreach (var sec in new[] { "SACVD", "NISACVD" })
                 {
                     foreach (var kv in weeklyCounts[sec]) weekLabels.Add(kv.Key);
                 }
@@ -299,11 +295,11 @@ ORDER BY [DataDate] DESC;
                 }
 
                 js.Append("],seriesAll:{");
-                AppendTrendSeries(js, labels, trendAll, new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" });
+                AppendTrendSeries(js, labels, trendAll, new[] { "SACVD", "NISACVD" });
                 js.Append("},seriesP14:{");
-                AppendTrendSeries(js, labels, trendP14, new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" });
+                AppendTrendSeries(js, labels, trendP14, new[] { "SACVD", "NISACVD" });
                 js.Append("},seriesP56:{");
-                AppendTrendSeries(js, labels, trendP56, new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" });
+                AppendTrendSeries(js, labels, trendP56, new[] { "SACVD", "NISACVD" });
                 js.Append("}};</script>");
 
                 // 先把 JS script 丟到最前面，確保前端圖表可讀到資料
@@ -314,17 +310,13 @@ ORDER BY [DataDate] DESC;
                 var monthLabels = new System.Collections.Generic.SortedSet<string>(StringComparer.Ordinal);
 
                 var monthCountsLevel1 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
-                monthCountsLevel1.Add("ULKCVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
-                monthCountsLevel1.Add("TEOSPE", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
-                monthCountsLevel1.Add("APF", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
-                monthCountsLevel1.Add("BLOKCVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                monthCountsLevel1.Add("SACVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                monthCountsLevel1.Add("NISACVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
 
                 // level2: section -> eqpid -> (yyyyMM -> count)
                 var monthCountsLevel2 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>>(StringComparer.Ordinal);
-                monthCountsLevel2.Add("ULKCVD", new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase));
-                monthCountsLevel2.Add("TEOSPE", new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase));
-                monthCountsLevel2.Add("APF", new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase));
-                monthCountsLevel2.Add("BLOKCVD", new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase));
+                monthCountsLevel2.Add("SACVD", new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase));
+                monthCountsLevel2.Add("NISACVD", new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.OrdinalIgnoreCase));
 
                 foreach (var r in rows)
                 {
@@ -438,13 +430,13 @@ ORDER BY [DataDate] DESC;
 
                 // child 列清單（每個 section 底下有哪些 child）
                 var weekChildren = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.SortedSet<string>>(StringComparer.Ordinal);
-                foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                foreach (var sec in new[] { "SACVD", "NISACVD" })
                 {
                     weekChildren.Add(sec, new System.Collections.Generic.SortedSet<string>(StringComparer.OrdinalIgnoreCase));
                 }
                 foreach (var k in weekCountsAll.Keys)
                 {
-                    foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                    foreach (var sec in new[] { "SACVD", "NISACVD" })
                     {
                         if (k.StartsWith(sec + "-", StringComparison.OrdinalIgnoreCase) && !string.Equals(k, sec, StringComparison.OrdinalIgnoreCase))
                         {
@@ -485,7 +477,7 @@ ORDER BY [DataDate] DESC;
                 }
                 weeklySb2.Append("</tr>");
 
-                foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                foreach (var sec in new[] { "SACVD", "NISACVD" })
                 {
                     // parent row
                     weeklySb2.Append("<tr class='week-parent' data-section='")
@@ -589,7 +581,7 @@ ORDER BY [DataDate] DESC;
                 }
                 monthlySb.Append("</tr>");
 
-                    foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                    foreach (var sec in new[] { "SACVD", "NISACVD" })
                 {
                     // parent row
                     monthlySb.Append("<tr class='sec-row parent-row' data-section='")
@@ -693,17 +685,15 @@ ORDER BY [DataDate] DESC;
                 }
 
                 // ===== 置頂公告 A：近 1 週內重複出現的機台（count>=2） =====
-                // Keep only the 4 main groups (ULKCVD/APF/TEOSPE/BLOKCVD)
+                // Keep only the 2 main groups (SACVD/NISACVD)
                 var dupList = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, int>>();
                 foreach (var kv in recentEqpidCount)
                 {
                     if (kv.Value < 2) continue;
 
                     string tool = kv.Key ?? "";
-                    bool ok = tool.StartsWith("ULKCVD-", StringComparison.OrdinalIgnoreCase)
-                           || tool.StartsWith("APF-", StringComparison.OrdinalIgnoreCase)
-                           || tool.StartsWith("TEOSPE-", StringComparison.OrdinalIgnoreCase)
-                           || tool.StartsWith("BLOKCVD-", StringComparison.OrdinalIgnoreCase);
+                    bool ok = tool.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase)
+                           || tool.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase);
                     if (!ok) continue;
 
                     dupList.Add(kv);
@@ -749,7 +739,7 @@ ORDER BY [DataDate] DESC;
                 DateTime cutoff24h = DateTime.Now.AddHours(-24);
 
                 var todayB = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.KeyValuePair<string, int>>(StringComparer.Ordinal);
-                foreach (var sec0 in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                foreach (var sec0 in new[] { "SACVD", "NISACVD" })
                 {
                     todayB[sec0] = new System.Collections.Generic.KeyValuePair<string, int>(null, 0);
                 }
@@ -791,7 +781,7 @@ ORDER BY [DataDate] DESC;
                         .Append("<div class='notice-list'>");
 
                 bool anyB = false;
-                foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD" })
+                foreach (var sec in new[] { "SACVD", "NISACVD" })
                 {
                     var kv = todayB[sec];
                     if (string.IsNullOrEmpty(kv.Key)) continue;
@@ -837,9 +827,9 @@ ORDER BY [DataDate] DESC;
                       .Append(Server.HtmlEncode("(n=" + count + ")"))
                       .Append("</span></div>");
 
-                    if (string.Equals(section, "ULKCVD", StringComparison.Ordinal))
+                    if (string.Equals(section, "SACVD", StringComparison.Ordinal))
                     {
-                        // 只有第一個區塊放 input（避免 id 重複）；但它會共用過濾所有區塊
+                        // search input only on the first section (avoid id collisions)
                         sb.Append("<div class='title-right'>")
                           .Append("<span class='search-label'>Search</span>")
                           .Append("<span class='search-label'>LOTID</span><input id='qLot' type='text' placeholder='contains...' />")
