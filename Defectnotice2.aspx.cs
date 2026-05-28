@@ -653,7 +653,7 @@ ORDER BY [DataDate] DESC;
     {
         if (string.IsNullOrWhiteSpace(eqpid)) return null;
 
-        // EQPID 可能是多台串起來（例如 CUSILPE-B21^ULKCVD-E04^^^^）
+        // EQPID 可能是多台串起來（例如 CUSILPE-B21^NISACVD-E04^^^^）
         // 只要任一段符合指定前綴，就歸到該 Section。
         string[] parts = eqpid.Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < parts.Length; i++)
@@ -674,7 +674,7 @@ ORDER BY [DataDate] DESC;
         return null;
     }
 
-    // 分類精簡：例如 ULKCVD 區內，只取出 ULKCVD-04 (遇到 ULKCVD-04^ULKCVD-A15... 也歸到 ULKCVD-04)
+    // 分類精簡：例如 NISACVD 區內，只取出 NISACVD-04 (遇到 NISACVD-04^NISACVD-A15... 也歸到 NISACVD-04)
     private static string NormalizeEqpid(string section, string eqpidRaw)
     {
         if (string.IsNullOrEmpty(eqpidRaw)) return eqpidRaw;
@@ -696,7 +696,7 @@ ORDER BY [DataDate] DESC;
         }
         if (candidate == null) candidate = eqpidRaw.Trim();
 
-        // 取 '-' 後的連續數字（ULKCVD-04A => 04；ULKCVD-004 => 004）
+        // 取 '-' 後的連續數字（NISACVD-04A => 04；NISACVD-004 => 004）
         int dash = candidate.IndexOf('-');
         if (dash < 0) return candidate;
         string rest = candidate.Substring(dash + 1);

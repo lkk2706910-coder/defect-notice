@@ -128,7 +128,6 @@ ORDER BY [DataDate] DESC;
 
                 // 先把資料讀進來（.NET 4.0 不支援 Dictionary 的 index initializer： ["k"] = v，所以改用 Add）
                 var rows = new System.Collections.Generic.List<System.Collections.Generic.Dictionary<string, string>>();
-                // NOTE: exclusions were ULKCVD-specific; cleared for NISACVD/SACVD
                 var excludedEqp = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 while (reader.Read())

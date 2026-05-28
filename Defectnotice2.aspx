@@ -555,7 +555,7 @@
                     }
 
 
-                    let activeSubEqpid = null; // e.g. ULKCVD-04
+                    let activeSubEqpid = null; // e.g. NISACVD-04
 
                     
 

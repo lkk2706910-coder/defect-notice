@@ -299,7 +299,7 @@ ORDER BY [DataDate] DESC;
                     if (!firstEq) js.Append(",");
                     firstEq = false;
 
-                    // short label: ULKCVD-B01 => U-B01, TEOSPE-B01 => T-B01, APF-B01 => A-B01, BLOKCVD-B01 => B-B01
+                    // short label: NISACVD-B01 => N-B01, SACVD-B01 => S-B01
                     string shortTool = ToShortToolLabel(sec, tool);
 
                     js.Append("{wk:\"")
@@ -335,7 +335,7 @@ ORDER BY [DataDate] DESC;
                 phTable.Controls.Add(new Literal { Text = js.ToString() });
 
                 // ===== Monthly table (level 1): columns = yyyyMM, rows = Section (NISACVD/SACVD) =====
-                // 同時準備 level 2（每個 Section 底下拆成各 EQPID，例如 ULKCVD-B01...）
+                // 同時準備 level 2（每個 Section 底下拆成各 EQPID，例如 NISACVD-B01...）
                 var monthLabels = new System.Collections.Generic.SortedSet<string>(StringComparer.Ordinal);
 
                 var monthCountsLevel1 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
@@ -545,7 +545,7 @@ ORDER BY [DataDate] DESC;
                     // child rows (hidden)
                     foreach (var child in weekChildren[sec])
                     {
-                        // 子列名稱只顯示 "-XX"（例如 ULKCVD-04 -> -04）
+                        // 子列名稱只顯示 "-XX"（例如 NISACVD-04 -> -04）
                         string childLabel = child;
                         if (childLabel.StartsWith(sec + "-", StringComparison.OrdinalIgnoreCase))
                         {
@@ -870,7 +870,7 @@ ORDER BY [DataDate] DESC;
                     {
                         if (!string.Equals(row["Section"], section, StringComparison.Ordinal)) continue;
 
-                        // 讓右邊卡片可被「ULKCVD-04」這種子分類過濾 + FAB(P56)
+                        // 讓右邊卡片可被「NISACVD-04」這種子分類過濾 + FAB(P56)
                         string rawEqpid = row["EQPID"] ?? "";
                         string normEqpid = NormalizeEqpid(section, rawEqpid);
                         bool isP56 = rawEqpid.IndexOf("-B", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -991,7 +991,7 @@ ORDER BY [DataDate] DESC;
         return null;
     }
 
-    // 分類精簡：例如 ULKCVD 區內，只取出 ULKCVD-04 (遇到 ULKCVD-04^ULKCVD-A15... 也歸到 ULKCVD-04)
+    // 分類精簡：例如 NISACVD 區內，只取出 NISACVD-04 (遇到 NISACVD-04^NISACVD-A15... 也歸到 NISACVD-04)
     private static string NormalizeEqpid(string section, string eqpidRaw)
     {
         if (string.IsNullOrEmpty(eqpidRaw)) return eqpidRaw;
@@ -1013,7 +1013,7 @@ ORDER BY [DataDate] DESC;
         }
         if (candidate == null) candidate = eqpidRaw.Trim();
 
-        // 取 '-' 後的連續數字（ULKCVD-04A => 04；ULKCVD-004 => 004）
+        // 取 '-' 後的連續數字（NISACVD-04A => 04；NISACVD-004 => 004）
         int dash = candidate.IndexOf('-');
         if (dash < 0) return candidate;
         string rest = candidate.Substring(dash + 1);
