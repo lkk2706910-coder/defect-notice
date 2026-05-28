@@ -640,7 +640,7 @@ ORDER BY [DataDate] DESC;
                                  .Append(childIsP56 ? "1" : "0")
                                  .Append("' style='display:none; cursor:pointer;'>");
 
-                        monthlySb.Append("<td style='padding:8px; padding-left:22px; border-bottom:1px solid rgba(255,255,255,0.06); color:rgba(231,238,252,0.92); text-decoration:underline;'>")
+                        monthlySb.Append("<td style='padding:8px; padding-left:22px; border-bottom:1px solid var(--tint-med); color:var(--text); text-decoration:underline; opacity:.92;'>")
                                  .Append(Server.HtmlEncode(eqpid))
                                  .Append("</td>");
 

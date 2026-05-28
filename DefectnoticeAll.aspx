@@ -5,23 +5,94 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+        // FOUC prevention: apply saved theme BEFORE the stylesheet is parsed
+        (function () {
+            try {
+                var t = localStorage.getItem('defectnotice-theme');
+                if (t !== 'light' && t !== 'dark') {
+                    t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
     <title>Defect Notice</title>
     <style>
-        :root {
+        :root, [data-theme="dark"] {
             --bg: #0b1220;
+            --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #152a52 0%, #0b1220 60%);
             --panel: #0f1b33;
+            --panel-elevated: #14233f;
             --text: #e7eefc;
             --muted: #a9b7d6;
             --border: rgba(255,255,255,0.12);
-            --header: rgba(255,255,255,0.06);
+            --header: var(--tint-med);
             --rowHover: rgba(99, 179, 237, 0.10);
             --chip: rgba(99, 179, 237, 0.18);
+            --chip-active-bg: rgba(99, 179, 237, 0.22);
+            --chip-active-border: rgba(99, 179, 237, 0.55);
+            --accent: #63b3ed;
+            --link: #6cb6ff;
+            --grid: rgba(255,255,255,0.08);
+            --row-stripe: rgba(255,255,255,0.025);
+            --shadow: rgba(0,0,0,0.5);
+            --placeholder-bg: #1e293b;
+            --placeholder-text: #94a3b8;
+            --eqpid-dup: #ffb86b;
+            --notice-bg: rgba(255, 200, 0, 0.06);
+            --notice-border: rgba(255, 200, 0, 0.4);
+            --tint-low: var(--tint-low);
+            --tint-med: var(--tint-med);
+            --tint-high: var(--tint-high);
+            --surface-sticky: var(--surface-sticky);
+            --input-bg: var(--input-bg);
+            --input-bg-strong: var(--input-bg-strong);
+            --accent-soft: #93c5fd;
+        }
+
+        [data-theme="light"] {
+            --bg: #f4f6fb;
+            --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #e8efff 0%, #f4f6fb 60%);
+            --panel: #ffffff;
+            --panel-elevated: #fafbfd;
+            --text: #1a2542;
+            --muted: #5a6b8c;
+            --border: rgba(0,0,0,0.10);
+            --header: rgba(0,0,0,0.04);
+            --rowHover: rgba(59, 130, 246, 0.08);
+            --chip: rgba(59, 130, 246, 0.10);
+            --chip-active-bg: rgba(59, 130, 246, 0.18);
+            --chip-active-border: rgba(59, 130, 246, 0.50);
+            --accent: #2563eb;
+            --link: #1d4ed8;
+            --grid: rgba(0,0,0,0.08);
+            --row-stripe: rgba(0,0,0,0.02);
+            --shadow: rgba(0,0,0,0.08);
+            --placeholder-bg: #e2e8f0;
+            --placeholder-text: #64748b;
+            --eqpid-dup: #c2410c;
+            --notice-bg: rgba(245, 158, 11, 0.08);
+            --notice-border: rgba(245, 158, 11, 0.4);
+            --tint-low: rgba(0,0,0,0.02);
+            --tint-med: rgba(0,0,0,0.04);
+            --tint-high: rgba(0,0,0,0.08);
+            --surface-sticky: rgba(255, 255, 255, 0.95);
+            --input-bg: rgba(255, 255, 255, 0.80);
+            --input-bg-strong: rgba(255, 255, 255, 0.95);
+            --accent-soft: #1e40af;
+        }
+
+        html, body {
+            transition: background 0.3s ease, color 0.3s ease;
         }
 
         body {
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
-            background: radial-gradient(1200px 600px at 20% 0%, #152a52 0%, var(--bg) 60%);
+            background: var(--bg-gradient);
             color: var(--text);
         }
 
@@ -32,7 +103,7 @@
         }
 
         .card {
-            background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+            background: linear-gradient(180deg, var(--tint-med), var(--tint-low));
             border: 1px solid var(--border);
             border-radius: 14px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.35);
@@ -42,7 +113,7 @@
         .card-header {
             padding: 18px 18px 10px 18px;
             border-bottom: 1px solid var(--border);
-            background: rgba(255,255,255,0.03);
+            background: var(--tint-low);
         }
 
         .title {
@@ -105,7 +176,7 @@
         table.notice-table th,
         table.notice-table td {
             padding: 8px 10px;
-            border-top: 1px solid rgba(255,255,255,0.10);
+            border-top: 1px solid var(--tint-high);
         }
 
         table.notice-table th {
@@ -130,7 +201,7 @@
         }
 
         a.pivot-eqp {
-            color: #93c5fd;
+            color: var(--accent-soft);
             text-decoration: underline;
             font-weight: 900;
         }
@@ -161,7 +232,7 @@
             border: 1px solid var(--border);
             border-radius: 999px;
             overflow: hidden;
-            background: rgba(255,255,255,0.03);
+            background: var(--tint-low);
         }
 
         .pill .chip {
@@ -230,7 +301,7 @@
         table.dn-table th,
         table.dn-table td {
             padding: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.10);
+            border-bottom: 1px solid var(--tint-high);
             vertical-align: top;
         }
 
@@ -238,7 +309,7 @@
             position: sticky;
             top: 0;
             z-index: 3;
-            background: rgba(10, 18, 32, 0.95);
+            background: var(--surface-sticky);
             color: var(--muted);
             font-weight: 900;
             letter-spacing: .02em;
@@ -251,7 +322,7 @@
         }
 
         .dn-title-cell a {
-            color: #93c5fd;
+            color: var(--accent-soft);
             text-decoration: underline;
             font-weight: 800;
         }
@@ -271,8 +342,8 @@
             width: 60px;
             height: 60px;
             border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.14);
-            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            background: var(--tint-med);
             object-fit: cover;
             display: block;
         }
@@ -282,13 +353,13 @@
         /* map should keep circular shape (no stretching) */
         .dn-img.dn-map {
             object-fit: contain;
-            background: rgba(255,255,255,0.03);
+            background: var(--tint-low);
         }
 
         .section {
             border: 1px solid var(--border);
             border-radius: 12px;
-            background: rgba(5, 10, 20, 0.30);
+            background: var(--input-bg);
             overflow: hidden;
         }
 
@@ -296,7 +367,7 @@
             padding: 10px 12px;
             font-weight: 800;
             letter-spacing: .02em;
-            background: rgba(255,255,255,0.04);
+            background: var(--tint-med);
             border-bottom: 1px solid var(--border);
         }
 
@@ -320,7 +391,7 @@
         .section-title .title-right input[type='text'] {
             width: 120px;
             background: transparent;
-            border: 1px solid rgba(255,255,255,0.14);
+            border: 1px solid var(--border);
             border-radius: 10px;
             padding: 6px 8px;
             outline: none;
@@ -336,7 +407,7 @@
             position: sticky;
             left: 0;
             z-index: 2;
-            background: rgba(5, 10, 20, 0.92);
+            background: var(--input-bg-strong);
         }
         #weeklySection th.sticky-col { z-index: 3; }
 
@@ -454,7 +525,7 @@
             padding: 4px 8px;
             border-radius: 999px;
             border: 1px solid var(--border);
-            background: rgba(255,255,255,0.03);
+            background: var(--tint-low);
             max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -493,7 +564,7 @@
 
         /* performance table */
         .perf-table { width:100%; border-collapse:collapse; font-size:12px; }
-        .perf-table th, .perf-table td { padding:8px; border-bottom:1px solid rgba(255,255,255,0.10); }
+        .perf-table th, .perf-table td { padding:8px; border-bottom:1px solid var(--tint-high); }
         .perf-table th { text-align:left; color: var(--muted); font-weight:800; letter-spacing:.02em; }
         .perf-table td.num, .perf-table th.num { text-align:right; }
 
@@ -517,7 +588,7 @@
             padding: 8px 14px;
             border-radius: 999px;
             border: 1px solid var(--border);
-            background: rgba(255,255,255,0.03);
+            background: var(--tint-low);
             color: var(--text);
             font-size: 13px;
             font-weight: 700;
@@ -533,6 +604,32 @@
         }
 
         .tab-pane { display: block; }
+
+        /* Theme toggle button (right side of tab-bar) */
+        .tab-bar { display: flex; align-items: center; gap: 6px; }
+        .theme-toggle {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--chip);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .theme-toggle:hover {
+            background: var(--chip-active-bg);
+            border-color: var(--chip-active-border);
+        }
+        .theme-toggle-icon { display: inline-block; width: 1em; height: 1em; line-height: 1; }
+        [data-theme="dark"] .theme-toggle-icon::before { content: '\263C'; }  /* sun (will switch to light) */
+        [data-theme="light"] .theme-toggle-icon::before { content: '\263D'; } /* moon (will switch to dark) */
+        [data-theme="dark"] .theme-toggle-label::before { content: 'Light'; }
+        [data-theme="light"] .theme-toggle-label::before { content: 'Dark'; }
 
         /* Defect image/map click-to-zoom overlay (shared by all tabs) */
         .dn-img-overlay {
@@ -565,6 +662,10 @@
                     <button type="button" class="tab-btn active" data-tab="Dash">主看版</button>
                     <button type="button" class="tab-btn" data-tab="Notice24">24hr Notice</button>
                     <button type="button" class="tab-btn" data-tab="Pivot">Pivot 分析</button>
+                    <button type="button" id="themeToggle" class="theme-toggle" title="切換深色 / 淺色模式" aria-label="Toggle theme">
+                        <span class="theme-toggle-icon"></span>
+                        <span class="theme-toggle-label"></span>
+                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -799,6 +900,16 @@
                 NISACVD: 'rgba(54, 162, 235, 0.9)'
             };
 
+            // Read chart-axis colors from CSS vars (so they follow the theme)
+            function themeColors() {
+                const css = getComputedStyle(document.documentElement);
+                return {
+                    text: (css.getPropertyValue('--text') || '#e7eefc').trim(),
+                    muted: (css.getPropertyValue('--muted') || '#a9b7d6').trim(),
+                    grid: (css.getPropertyValue('--grid') || 'rgba(255,255,255,0.08)').trim(),
+                };
+            }
+
             const makeDataset = (k) => ({
                 label: k,
                 data: (getSeriesByFab()[k] || []),
@@ -810,6 +921,7 @@
             });
 
             let chartType = 'bar';
+            let tc = themeColors();
             const chart = new Chart(ctx, {
                 type: chartType,
                 data: {
@@ -820,19 +932,19 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: '#e7eefc' } },
+                        legend: { labels: { color: tc.text } },
                         tooltip: { mode: 'index', intersect: false }
                     },
                     interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { ticks: { color: '#a9b7d6', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,0.08)' } },
+                        x: { ticks: { color: tc.muted, maxRotation: 0, autoSkip: true }, grid: { color: tc.grid } },
                         y: {
                             type: 'logarithmic',
                             ticks: {
-                                color: '#a9b7d6',
+                                color: tc.muted,
                                 callback: (v) => (v === 1 ? '1' : (v % 10 === 0 ? v : ''))
                             },
-                            grid: { color: 'rgba(255,255,255,0.08)' },
+                            grid: { color: tc.grid },
                             beginAtZero: false
                         }
                     }
@@ -847,16 +959,32 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: '#e7eefc' } },
+                        legend: { labels: { color: tc.text } },
                         tooltip: { mode: 'index', intersect: false }
                     },
                     interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { ticks: { color: '#a9b7d6', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,0.08)' } },
-                        y: { ticks: { color: '#a9b7d6' }, grid: { color: 'rgba(255,255,255,0.08)' }, beginAtZero: true }
+                        x: { ticks: { color: tc.muted, maxRotation: 0, autoSkip: true }, grid: { color: tc.grid } },
+                        y: { ticks: { color: tc.muted }, grid: { color: tc.grid }, beginAtZero: true }
                     }
                 }
             });
+
+            // Re-color both charts when theme changes
+            function applyThemeToCharts() {
+                const c = themeColors();
+                tc = c;
+                [chart, eqWeekChart].forEach(ch => {
+                    if (!ch) return;
+                    ch.options.plugins.legend.labels.color = c.text;
+                    ch.options.scales.x.ticks.color = c.muted;
+                    ch.options.scales.x.grid.color = c.grid;
+                    ch.options.scales.y.ticks.color = c.muted;
+                    ch.options.scales.y.grid.color = c.grid;
+                    ch.update('none');
+                });
+            }
+            document.addEventListener('themechange', applyThemeToCharts);
 
             function toIsoWeekString(date) {
                 const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -2301,6 +2429,19 @@
 
             wireCardToggle();
             syncVisibility();
+        })();
+
+        /* === Theme toggle (page-level) === */
+        (function () {
+            const btn = document.getElementById('themeToggle');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+                const next = (cur === 'dark') ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                try { localStorage.setItem('defectnotice-theme', next); } catch (e) {}
+                document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
+            });
         })();
 
         /* === Click-to-zoom overlay for defect image / defect map (page-level) === */
