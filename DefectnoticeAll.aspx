@@ -997,6 +997,11 @@
                     ch.options.scales.y.grid.color = c.grid;
                     ch.update('none');
                 });
+                // Pie charts capture legend label color at construction time;
+                // rebuild them if pie mode is currently active.
+                if (typeof chartType !== 'undefined' && chartType === 'pie') {
+                    renderToolPieCharts();
+                }
             }
             document.addEventListener('themechange', applyThemeToCharts);
 
@@ -1292,7 +1297,7 @@
                                 legend: {
                                     position: 'right',
                                     labels: {
-                                        color: '#ffffff',
+                                        color: tc.text,
                                         boxWidth: 10,
                                         font: { size: 11, weight: '700' },
                                         padding: 10,
@@ -1315,7 +1320,7 @@
                                                     lineWidth: 0,
                                                     hidden: false,
                                                     index: i,
-                                                    fontColor: '#ffffff'
+                                                    fontColor: tc.text
                                                 };
                                             });
                                         }
