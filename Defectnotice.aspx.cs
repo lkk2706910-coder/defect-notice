@@ -3,7 +3,7 @@ using System.Data.SqlClient;
 using System.Text;
 using System.Web.UI.WebControls;
 
-public partial class GPTPoCDB_SampleSite_NotesTable : System.Web.UI.Page
+public partial class DefectnoticeDash : System.Web.UI.Page
 {
     // ISO week helper (compatible with .NET 4.x)
     private static void GetIsoWeekYear(DateTime date, out int isoYear, out int isoWeek)

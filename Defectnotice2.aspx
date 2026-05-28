@@ -1,4 +1,4 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeFile="Defectnotice2.aspx.cs" Inherits="GPTPoCDB_SampleSite_NotesTable" %>
+<%@ Page Language="C#" AutoEventWireup="true" CodeFile="Defectnotice2.aspx.cs" Inherits="DefectnoticeNotice24" %>
 
 <!DOCTYPE html>
 <html>
