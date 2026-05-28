@@ -533,6 +533,27 @@
         }
 
         .tab-pane { display: block; }
+
+        /* Defect image/map click-to-zoom overlay (shared by all tabs) */
+        .dn-img-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: zoom-out;
+        }
+        .dn-img-overlay img {
+            max-width: 90vw;
+            max-height: 90vh;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            background: #0f1b33;
+        }
+        a.dn-img-link { cursor: zoom-in; }
     </style>
 </head>
 <body>
@@ -2280,6 +2301,47 @@
 
             wireCardToggle();
             syncVisibility();
+        })();
+
+        /* === Click-to-zoom overlay for defect image / defect map (page-level) === */
+        (function () {
+            let overlay = null;
+
+            function hideOverlay() {
+                if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                overlay = null;
+            }
+
+            function showOverlay(src) {
+                hideOverlay();
+                overlay = document.createElement('div');
+                overlay.className = 'dn-img-overlay';
+                const imgEl = document.createElement('img');
+                imgEl.src = src;
+                overlay.appendChild(imgEl);
+                document.body.appendChild(overlay);
+            }
+
+            // Capture phase so we beat the <a target="_blank"> default
+            document.addEventListener('click', function (ev) {
+                if (overlay) {
+                    // any click while overlay is open -> close it
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    hideOverlay();
+                    return;
+                }
+                const img = ev.target && ev.target.closest ? ev.target.closest('a img.dn-img') : null;
+                if (!img) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                showOverlay(img.getAttribute('src'));
+            }, true);
+
+            // ESC also closes
+            document.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Escape' && overlay) hideOverlay();
+            });
         })();
     </script>
 </body>
