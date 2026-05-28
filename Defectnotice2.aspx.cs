@@ -30,8 +30,13 @@ public partial class GPTPoCDB_SampleSite_NotesTable : System.Web.UI.Page
 
         // section -> initial
         string initial = null;
-        if (string.Equals(section, "NISACVD", StringComparison.OrdinalIgnoreCase)) initial = "N";
+        if (string.Equals(section, "ULKCVD", StringComparison.OrdinalIgnoreCase)) initial = "U";
+        else if (string.Equals(section, "TEOSPE", StringComparison.OrdinalIgnoreCase)) initial = "T";
+        else if (string.Equals(section, "APF", StringComparison.OrdinalIgnoreCase)) initial = "A";
+        else if (string.Equals(section, "BLOKCVD", StringComparison.OrdinalIgnoreCase)) initial = "B";
+        else if (string.Equals(section, "NISACVD", StringComparison.OrdinalIgnoreCase)) initial = "N";
         else if (string.Equals(section, "SACVD", StringComparison.OrdinalIgnoreCase)) initial = "S";
+
 
         if (initial == null) return tool;
 
@@ -48,7 +53,7 @@ public partial class GPTPoCDB_SampleSite_NotesTable : System.Web.UI.Page
     {
         string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
 
-                // 依需求：機群（NISACVD/SACVD）
+                // 依需求：機群（ULKCVD/TEOSPE/APF/BLOKCVD/NISACVD/SACVD）
         string sql = @"
 SELECT TOP (1000)
     [DataDate],
@@ -69,7 +74,11 @@ SELECT TOP (1000)
 FROM [GPTPoCDB].[dbo].[_DefectNotice_FAB]
 WHERE
     (
-        EQPID LIKE 'NISACVD-%' OR EQPID LIKE '%NISACVD%'
+        EQPID LIKE 'TEOSPE-%' OR EQPID LIKE '%TEOSPE%'
+        OR EQPID LIKE 'ULKCVD-%' OR EQPID LIKE '%ULKCVD%'
+        OR EQPID LIKE 'APF-%' OR EQPID LIKE '%APF%'
+        OR EQPID LIKE 'BLOKCVD-%' OR EQPID LIKE '%BLOKCVD%'
+        OR EQPID LIKE 'NISACVD-%' OR EQPID LIKE '%NISACVD%'
         OR EQPID LIKE 'SACVD-%' OR EQPID LIKE '%SACVD%'
     )
         AND ISSUEDATE >= @StartDate
@@ -109,7 +118,7 @@ ORDER BY [DataDate] DESC;
                 int ordEqpId = reader.GetOrdinal("EQPID");
                 int ordDocUrl = reader.GetOrdinal("DOCURL");
 
-                var sections = new[] { "NISACVD", "SACVD" };
+                var sections = new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD", "NISACVD", "SACVD" };
                 var sb = new StringBuilder();
 
                 foreach (var section in sections)
@@ -162,7 +171,7 @@ ORDER BY [DataDate] DESC;
                 var trendP14 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
                 var trendP56 = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
 
-                foreach (var sec0 in new[] { "NISACVD", "SACVD" })
+                foreach (var sec0 in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD", "NISACVD", "SACVD" })
                 {
                     trendAll.Add(sec0, new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
                     trendP14.Add(sec0, new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
@@ -218,6 +227,10 @@ ORDER BY [DataDate] DESC;
 
                 // ===== Weekly table: count by week (Mon-Sun), per section =====
                 var weeklyCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>>(StringComparer.Ordinal);
+                                weeklyCounts.Add("ULKCVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                weeklyCounts.Add("TEOSPE", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                weeklyCounts.Add("APF", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
+                weeklyCounts.Add("BLOKCVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
                 weeklyCounts.Add("NISACVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
                 weeklyCounts.Add("SACVD", new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal));
 
@@ -241,7 +254,7 @@ ORDER BY [DataDate] DESC;
                 }
 
                 var weekLabels = new System.Collections.Generic.SortedSet<string>(StringComparer.Ordinal);
-                                foreach (var sec in new[] { "NISACVD", "SACVD" })
+                                foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD", "NISACVD", "SACVD" })
                 {
                     foreach (var kv in weeklyCounts[sec]) weekLabels.Add(kv.Key);
                 }
@@ -312,7 +325,7 @@ ORDER BY [DataDate] DESC;
                     if (!firstEq) js.Append(",");
                     firstEq = false;
 
-                    // short label: NISACVD-01 => N-01, SACVD-01 => S-01
+                    // short label: ULKCVD-B01 => U-B01, TEOSPE-B01 => T-B01, APF-B01 => A-B01, BLOKCVD-B01 => B-B01
                     string shortTool = ToShortToolLabel(sec, tool);
 
                     js.Append("{wk:\"")
@@ -397,7 +410,11 @@ ORDER BY [DataDate] DESC;
                         string p = (parts[i] ?? "").Trim();
                         if (p.Length == 0) continue;
 
-                                                bool ok = p.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)
+                                                bool ok = p.StartsWith("ULKCVD-", StringComparison.OrdinalIgnoreCase)
+                               || p.StartsWith("APF-", StringComparison.OrdinalIgnoreCase)
+                               || p.StartsWith("TEOSPE-", StringComparison.OrdinalIgnoreCase)
+                               || p.StartsWith("BLOKCVD-", StringComparison.OrdinalIgnoreCase)
+                               || p.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)
                                || p.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase);
 
                         if (!ok) continue;
@@ -478,7 +495,7 @@ ORDER BY [DataDate] DESC;
                       .Append("</span></div>");
 
                     // 只有第一個區塊放 input（避免 id 重複）；但它會共用過濾所有區塊
-                    if (string.Equals(section, "NISACVD", StringComparison.Ordinal))
+                    if (string.Equals(section, "ULKCVD", StringComparison.Ordinal))
                     {
                         sb.Append("<div class='title-right'>")
                           .Append("<span class='search-label'>Search</span>")
@@ -659,12 +676,21 @@ ORDER BY [DataDate] DESC;
             string p = parts[i].Trim();
             if (p.Length == 0) continue;
 
+            // 注意：避免把 CULKCVD-xxx 算進 ULKCVD
+            if (p.StartsWith("ULKCVD-", StringComparison.OrdinalIgnoreCase) && !p.StartsWith("CULKCVD-", StringComparison.OrdinalIgnoreCase)) return "ULKCVD";
+            if (p.StartsWith("TEOSPE-", StringComparison.OrdinalIgnoreCase)) return "TEOSPE";
+            if (p.StartsWith("APF-", StringComparison.OrdinalIgnoreCase)) return "APF";
+            if (p.StartsWith("BLOKCVD-", StringComparison.OrdinalIgnoreCase)) return "BLOKCVD";
             if (p.StartsWith("NISACVD-", StringComparison.OrdinalIgnoreCase)) return "NISACVD";
             if (p.StartsWith("SACVD-", StringComparison.OrdinalIgnoreCase)) return "SACVD";
 
         }
 
         // 如果沒有 ^，或 Split 後沒有命中，退回用 contains 判斷（避免漏資料）
+        if (eqpid.IndexOf("ULKCVD-", StringComparison.OrdinalIgnoreCase) >= 0 && eqpid.IndexOf("CULKCVD-", StringComparison.OrdinalIgnoreCase) < 0) return "ULKCVD";
+        if (eqpid.IndexOf("TEOSPE-", StringComparison.OrdinalIgnoreCase) >= 0) return "TEOSPE";
+        if (eqpid.IndexOf("APF-", StringComparison.OrdinalIgnoreCase) >= 0) return "APF";
+        if (eqpid.IndexOf("BLOKCVD-", StringComparison.OrdinalIgnoreCase) >= 0) return "BLOKCVD";
         if (eqpid.IndexOf("NISACVD-", StringComparison.OrdinalIgnoreCase) >= 0) return "NISACVD";
         if (eqpid.IndexOf("SACVD-", StringComparison.OrdinalIgnoreCase) >= 0) return "SACVD";
 
@@ -761,7 +787,7 @@ ORDER BY [DataDate] DESC;
         System.Collections.Generic.List<string> labels,
         System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, int>> series)
     {
-        foreach (var sec in new[] { "NISACVD", "SACVD" })
+        foreach (var sec in new[] { "ULKCVD", "TEOSPE", "APF", "BLOKCVD", "NISACVD", "SACVD" })
         {
             js.Append(sec).Append(":[");
             for (int i = 0; i < labels.Count; i++)
