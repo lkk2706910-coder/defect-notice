@@ -767,12 +767,11 @@
             // quick sanity log
             try { console.log('Defectnotice JS start', new Date().toISOString()); } catch (e) { }
 
-            // chartData / tool performance / eq-week chart 由後端塞入 window.__trendData / window.__perfRows / window.__eqChartRows
-            // 新格式：seriesAll/seriesP14/seriesP56；舊格式：series
-            const trend = window.__trendData || { labels: [], series: { SACVD: [], NISACVD: [] } };
-            try { console.log('trend labels', (trend.labels||[]).length, 'perfRows', (window.__perfRows||[]).length, 'eqChartRows', (window.__eqChartRows||[]).length); } catch (e) { }
-            const perfRows = window.__perfRows || []; // [{d:'yyyy-MM-dd', sec:'SACVD', tool:'SACVD-04', isP56:0/1}]
-            const eqChartRows = window.__eqChartRows || []; // [{wk:'2026W08', sec:'SACVD', tool:'SACVD-04', toolShort:'S-04', isP56:0/1}]
+            // Dashboard-specific globals (avoid name clash with Notice24/Pivot dead emits)
+            const trend = window.__trendDataDash || { labels: [], series: { SACVD: [], NISACVD: [] } };
+            try { console.log('trend labels', (trend.labels||[]).length, 'perfRows', (window.__perfRowsDash||[]).length, 'eqChartRows', (window.__eqChartRowsDash||[]).length); } catch (e) { }
+            const perfRows = window.__perfRowsDash || []; // [{d:'yyyy-MM-dd', sec:'SACVD', tool:'SACVD-04', isP56:0/1}]
+            const eqChartRows = window.__eqChartRowsDash || []; // [{wk:'2026W08', sec:'SACVD', tool:'SACVD-04', toolShort:'S-04', isP56:0/1}]
 
             const ctx = pane.querySelector('#trendChart');
             const ctxEq = pane.querySelector('#eqWeekChart');

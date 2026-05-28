@@ -211,7 +211,7 @@ ORDER BY [DataDate] DESC;
                 js.Append("<script>");
 
                 // perf rows
-                js.Append("window.__perfRows=[");
+                js.Append("window.__perfRowsDash=[");
                 bool firstPerf = true;
                 for (int i = 0; i < rows.Count; i++)
                 {
@@ -243,7 +243,7 @@ ORDER BY [DataDate] DESC;
                 js.Append("];\n");
 
                 // eq chart rows: one event per row, front-end will group by week + tool
-                js.Append("window.__eqChartRows=[");
+                js.Append("window.__eqChartRowsDash=[");
                 bool firstEq = true;
                 for (int i = 0; i < rows.Count; i++)
                 {
@@ -286,7 +286,7 @@ ORDER BY [DataDate] DESC;
                 }
                 js.Append("];\n");
 
-                js.Append("window.__trendData={labels:[");
+                js.Append("window.__trendDataDash={labels:[");
                 for (int i = 0; i < labels.Count; i++)
                 {
                     if (i > 0) js.Append(",");
