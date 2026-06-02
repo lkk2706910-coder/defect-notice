@@ -365,22 +365,39 @@
             text-align: center;
             white-space: nowrap;
         }
+        td.link-cell .link-row {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            justify-content: center;
+            vertical-align: middle;
+            max-width: calc(100% - 30px);
+        }
         td.link-cell .link-icon {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 28px; height: 28px;
+            min-width: 28px; height: 26px;
+            padding: 0 4px;
             border-radius: 6px;
             text-decoration: none;
-            font-size: 16px;
+            font-size: 14px;
             line-height: 1;
             background: var(--chip);
             border: 1px solid var(--border);
             transition: background .15s, border-color .15s;
+            color: var(--text);
         }
         td.link-cell .link-icon:hover {
             background: var(--chip-active-bg);
             border-color: var(--chip-active-border);
+        }
+        td.link-cell .link-emoji { font-size: 13px; }
+        td.link-cell .link-idx {
+            margin-left: 3px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--muted);
         }
         td.link-cell .mini-btn {
             margin-left: 4px;
@@ -391,11 +408,36 @@
             background: var(--tint-low);
             color: var(--text);
             cursor: pointer;
+            vertical-align: middle;
         }
         td.link-cell .mini-btn:hover {
             background: var(--chip);
             border-color: var(--accent);
         }
+        td.link-cell .link-placeholder {
+            display: inline-block;
+            font-size: 11px;
+            color: var(--muted);
+            opacity: 0.55;
+            font-style: italic;
+            vertical-align: middle;
+        }
+
+        /* Link editor popover (reuses .filter-pop layout but with a textarea) */
+        .link-editor .link-textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--input-bg);
+            color: var(--text);
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            outline: none;
+        }
+        .link-editor .link-textarea:focus { border-color: var(--accent); }
 
         /* Image overlay */
         .img-overlay {
@@ -563,6 +605,20 @@
             return 'https://' + s;
         }
 
+        // Parse a link field (newline-separated or array) into a clean array of URLs.
+        function parseLinks(raw) {
+            if (Array.isArray(raw)) {
+                return raw.map(s => String(s || '').trim()).filter(s => s.length > 0);
+            }
+            return String(raw || '')
+                .split(/[\r\n]+/)
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+        }
+        function joinLinks(arr) {
+            return (arr || []).map(s => String(s || '').trim()).filter(Boolean).join('\n');
+        }
+
         function renderRow(c) {
             const tr = document.createElement('tr');
             tr.setAttribute('data-id', c.id);
@@ -614,25 +670,26 @@
                     });
                 } else if (col.kind === 'link') {
                     td.className = 'link-cell';
-                    const v = c[col.key] || '';
-                    if (v) {
-                        const safeHref = escapeHtml(normalizeUrl(v));
-                        const safeTitle = escapeHtml(v);
+                    const arr = parseLinks(c[col.key]);
+                    if (arr.length > 0) {
+                        const iconsHtml = arr.map((u, i) =>
+                            '<a class="link-icon" target="_blank" rel="noopener noreferrer" href="' +
+                                escapeHtml(normalizeUrl(u)) + '" title="' + escapeHtml(u) + '">' +
+                                '<span class="link-emoji">🔗</span>' +
+                                (arr.length > 1 ? '<span class="link-idx">' + (i + 1) + '</span>' : '') +
+                            '</a>'
+                        ).join('');
                         td.innerHTML =
-                            '<a class="link-icon" target="_blank" rel="noopener noreferrer" href="' + safeHref + '" title="' + safeTitle + '">🔗</a>' +
-                            '<button type="button" class="mini-btn" data-act="edit-link" title="編輯連結">✎</button>';
+                            '<div class="link-row">' + iconsHtml + '</div>' +
+                            '<button type="button" class="mini-btn" data-act="edit-link" title="編輯連結(每行一個)">✎</button>';
                     } else {
-                        td.innerHTML = '<div class="cell-text" contenteditable="true" data-key="' + col.key + '" data-placeholder="貼上連結"></div>';
+                        td.innerHTML = '<div class="cell-text link-placeholder" data-key="' + col.key + '" data-placeholder="點 ✎ 新增連結">&nbsp;</div>' +
+                            '<button type="button" class="mini-btn" data-act="edit-link" title="新增連結">+</button>';
                     }
                     td.addEventListener('click', (ev) => {
                         const btn = ev.target.closest && ev.target.closest('[data-act="edit-link"]');
                         if (!btn) return;
-                        td.innerHTML = '<div class="cell-text" contenteditable="true" data-key="' + col.key + '">' + escapeHtml(v) + '</div>';
-                        const ce = td.querySelector('.cell-text');
-                        ce.focus();
-                        // select all so user can replace easily
-                        document.execCommand && document.execCommand('selectAll', false, null);
-                        wireEditable(ce, c);
+                        openLinkEditor(c, col.key, td);
                     });
                 } else {
                     td.className = 'editable';
@@ -903,13 +960,85 @@
                 renderAll();
             });
         }
+
+        // ---- Multi-link editor popover ----
+        let linkEditorPop = null;
+        function closeLinkEditor() {
+            if (linkEditorPop && linkEditorPop.parentNode) linkEditorPop.parentNode.removeChild(linkEditorPop);
+            linkEditorPop = null;
+        }
+        function openLinkEditor(c, key, anchor) {
+            closeLinkEditor();
+            const initial = joinLinks(parseLinks(c[key]));
+
+            const pop = document.createElement('div');
+            pop.className = 'filter-pop link-editor';
+            const rect = anchor.getBoundingClientRect();
+            const top = rect.bottom + window.scrollY + 4;
+            // align right edge of popover with right edge of anchor if popover would overflow
+            const popWidth = 360;
+            let left = rect.left + window.scrollX;
+            if (left + popWidth > window.innerWidth + window.scrollX) {
+                left = Math.max(8, window.innerWidth + window.scrollX - popWidth - 8);
+            }
+            pop.style.top = top + 'px';
+            pop.style.left = left + 'px';
+            pop.style.width = popWidth + 'px';
+            pop.innerHTML =
+                '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">每行一個連結(可貼上多個 URL)</div>' +
+                '<textarea class="link-textarea" rows="6" placeholder="https://...&#10;https://...">' + escapeHtml(initial) + '</textarea>' +
+                '<div class="filter-toolbar">' +
+                    '<button type="button" class="ftb" data-act="clear">清空</button>' +
+                    '<button type="button" class="ftb" data-act="cancel">取消</button>' +
+                    '<button type="button" class="ftb primary" data-act="apply">套用</button>' +
+                '</div>';
+            document.body.appendChild(pop);
+            linkEditorPop = pop;
+
+            const ta = pop.querySelector('.link-textarea');
+            ta.focus();
+            // place cursor at end
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+
+            pop.querySelector('[data-act="clear"]').addEventListener('click', () => { ta.value = ''; ta.focus(); });
+            pop.querySelector('[data-act="cancel"]').addEventListener('click', closeLinkEditor);
+            pop.querySelector('[data-act="apply"]').addEventListener('click', () => {
+                const arr = parseLinks(ta.value);
+                const newVal = arr.join('\n');
+                if ((c[key] || '') !== newVal) {
+                    c[key] = newVal;
+                    markDirty();
+                    const tr = anchor.closest('tr');
+                    if (tr) {
+                        const newTr = renderRow(c);
+                        tr.replaceWith(newTr);
+                    }
+                }
+                closeLinkEditor();
+            });
+            // Ctrl+Enter as a shortcut to apply
+            ta.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    pop.querySelector('[data-act="apply"]').click();
+                }
+            });
+        }
+
         // click outside / ESC closes popover
         document.addEventListener('mousedown', (ev) => {
-            if (!activePopover) return;
-            if (activePopover.contains(ev.target)) return;
-            // also ignore clicks on the filter buttons themselves (they reopen)
-            if (ev.target.closest && ev.target.closest('[data-act="filter"]')) return;
-            closeFilterPopover();
+            if (activePopover) {
+                if (!activePopover.contains(ev.target) &&
+                    !(ev.target.closest && ev.target.closest('[data-act="filter"]'))) {
+                    closeFilterPopover();
+                }
+            }
+            if (linkEditorPop) {
+                if (!linkEditorPop.contains(ev.target) &&
+                    !(ev.target.closest && ev.target.closest('[data-act="edit-link"]'))) {
+                    closeLinkEditor();
+                }
+            }
         }, true);
 
         // ---- Image upload (file -> base64) ----
@@ -993,6 +1122,7 @@
             if (e.key === 'Escape') {
                 closeOverlay();
                 closeFilterPopover();
+                closeLinkEditor();
                 if (state.pendingImageCell) {
                     state.pendingImageCell = null;
                     clearPasteHighlight();
