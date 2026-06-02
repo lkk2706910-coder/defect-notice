@@ -1,4 +1,4 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeFile="DefectLessonLearn.aspx.cs" Inherits="DefectLessonLearn" %>
+﻿<%@ Page Language="C#" AutoEventWireup="true" CodeFile="DefectLessonLearn.aspx.cs" Inherits="DefectLessonLearn" ResponseEncoding="utf-8" CodePage="65001" %>
 
 <!DOCTYPE html>
 <html>
@@ -155,9 +155,11 @@
             background: var(--tint-med);
             color: var(--text);
             font-weight: 800;
-            font-size: 11px;
+            font-size: 12px;
             letter-spacing: .02em;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             z-index: 2;
         }
         table.cases tbody tr:hover td { background: var(--row-hover); }
@@ -267,23 +269,23 @@
         [data-theme="dark"] .theme-toggle-label::before { content: 'Light'; }
         [data-theme="light"] .theme-toggle-label::before { content: 'Dark'; }
 
-        .col-img { width: 110px; }
-        .col-date { width: 90px; }
-        .col-cat { width: 140px; }
-        .col-link { width: 90px; }
-        .col-parts { width: 110px; }
-        .col-root { min-width: 220px; max-width: 320px; }
-        .col-entity { width: 130px; }
-        .col-eqp { width: 130px; }
-        .col-impact { width: 100px; }
-        .col-gen { width: 70px; }
-        .col-model { width: 100px; }
-        .col-defect { width: 110px; }
-        .col-map { width: 70px; }
-        .col-edx { width: 70px; }
-        .col-trend { width: 80px; }
-        .col-pos { width: 90px; }
-        .col-other { width: 110px; }
+        .col-img { min-width: 110px; }
+        .col-date { min-width: 100px; }
+        .col-cat { min-width: 140px; }
+        .col-link { min-width: 90px; }
+        .col-parts { min-width: 110px; }
+        .col-root { min-width: 240px; max-width: 360px; }
+        .col-entity { min-width: 150px; }
+        .col-eqp { min-width: 130px; }
+        .col-impact { min-width: 110px; }
+        .col-gen { min-width: 100px; }
+        .col-model { min-width: 110px; }
+        .col-defect { min-width: 120px; }
+        .col-map { min-width: 70px; }
+        .col-edx { min-width: 70px; }
+        .col-trend { min-width: 110px; }
+        .col-pos { min-width: 100px; }
+        .col-other { min-width: 130px; }
     </style>
 </head>
 <body>
