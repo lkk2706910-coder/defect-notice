@@ -168,6 +168,7 @@
             width: 110px;
             min-width: 110px;
             text-align: center;
+            position: relative;
         }
         td.img-cell img {
             max-width: 100px; max-height: 120px;
@@ -175,18 +176,55 @@
             border: 1px solid var(--border);
             cursor: zoom-in;
         }
-        td.img-cell .upload-hint {
-            display: inline-block;
-            padding: 8px 6px;
-            font-size: 11px;
-            color: var(--muted);
-            cursor: pointer;
-            border: 1px dashed var(--border);
-            border-radius: 6px;
-            width: 100px; height: 80px;
-            line-height: 1.2;
+        td.img-cell.pasting {
+            outline: 2px dashed var(--accent);
+            outline-offset: -2px;
+            background: var(--row-hover);
         }
-        td.img-cell .upload-hint:hover { background: var(--row-hover); color: var(--text); border-color: var(--accent); }
+        td.img-cell .img-actions {
+            display: flex; flex-direction: column; gap: 4px;
+            align-items: stretch;
+            width: 100px;
+            margin: 0 auto;
+        }
+        td.img-cell .img-actions .mini-btn {
+            font-size: 11px;
+            padding: 4px 6px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--tint-low);
+            color: var(--text);
+            cursor: pointer;
+        }
+        td.img-cell .img-actions .mini-btn:hover {
+            background: var(--chip);
+            border-color: var(--accent);
+            color: var(--text);
+        }
+        td.img-cell .img-replace {
+            position: absolute;
+            top: 4px; right: 4px;
+            display: none;
+            gap: 2px;
+        }
+        td.img-cell:hover .img-replace { display: flex; }
+        td.img-cell .img-replace .mini-btn {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: var(--panel-elevated);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text);
+            opacity: 0.9;
+        }
+        td.img-cell .img-replace .mini-btn:hover { background: var(--accent); color: white; opacity: 1; }
+        td.img-cell .paste-hint {
+            font-size: 10px;
+            color: var(--accent);
+            margin-top: 4px;
+            font-weight: 700;
+        }
         td.actions {
             white-space: nowrap;
             width: 56px;
@@ -367,20 +405,43 @@
                     td.className = 'img-cell';
                     const v = c[col.key] || '';
                     if (v) {
-                        td.innerHTML = '<img alt="' + col.key + '" src="' + v + '"/>';
+                        td.innerHTML =
+                            '<img alt="' + col.key + '" src="' + v + '"/>' +
+                            '<div class="img-replace">' +
+                                '<button type="button" class="mini-btn" data-act="replace">更換</button>' +
+                                '<button type="button" class="mini-btn" data-act="remove">移除</button>' +
+                            '</div>';
                     } else {
-                        td.innerHTML = '<span class="upload-hint">點此上傳<br/>' + col.key + '</span>';
+                        td.innerHTML =
+                            '<div class="img-actions">' +
+                                '<button type="button" class="mini-btn" data-act="upload">📁 選檔</button>' +
+                                '<button type="button" class="mini-btn" data-act="paste">📋 貼上</button>' +
+                                '<div style="font-size:10px; color:var(--muted); margin-top:2px;">' + col.key + '</div>' +
+                            '</div>';
                     }
                     td.addEventListener('click', (ev) => {
-                        const isImg = ev.target.tagName === 'IMG';
-                        if (isImg) {
-                            // open overlay
+                        // Click on image -> overlay viewer
+                        if (ev.target.tagName === 'IMG') {
                             openOverlay(ev.target.src);
-                        } else {
-                            // upload
+                            return;
+                        }
+                        const btn = ev.target.closest && ev.target.closest('[data-act]');
+                        if (!btn) return;
+                        const act = btn.getAttribute('data-act');
+                        if (act === 'upload' || act === 'replace') {
                             state.pendingImageCell = { id: c.id, key: col.key, td: td };
+                            clearPasteHighlight();
                             hiddenFile.value = '';
                             hiddenFile.click();
+                        } else if (act === 'paste') {
+                            state.pendingImageCell = { id: c.id, key: col.key, td: td };
+                            setPasteHighlight(td);
+                            setStatus('已選定 ' + col.key + ' 欄,請按 Ctrl+V 貼上剪貼簿的圖片', 'dirty');
+                        } else if (act === 'remove') {
+                            c[col.key] = '';
+                            markDirty();
+                            const newTr = renderRow(c);
+                            tr.replaceWith(newTr);
                         }
                     });
                 } else if (col.kind === 'link') {
@@ -464,27 +525,65 @@
         }
 
         // ---- Image upload (file -> base64) ----
+        function applyImageDataUrl(dataUrl) {
+            const ctx = state.pendingImageCell;
+            if (!ctx) return false;
+            const c = state.cases.find(x => x.id === ctx.id);
+            if (!c) return false;
+            c[ctx.key] = dataUrl;
+            const tr = ctx.td.closest('tr');
+            if (tr) {
+                const newTr = renderRow(c);
+                tr.replaceWith(newTr);
+            }
+            state.pendingImageCell = null;
+            clearPasteHighlight();
+            markDirty();
+            return true;
+        }
+
         hiddenFile.addEventListener('change', () => {
             const f = hiddenFile.files && hiddenFile.files[0];
-            if (!f || !state.pendingImageCell) return;
+            if (!f) return;
             const reader = new FileReader();
-            reader.onload = () => {
-                const dataUrl = reader.result;
-                const ctx = state.pendingImageCell;
-                const c = state.cases.find(x => x.id === ctx.id);
-                if (!c) return;
-                c[ctx.key] = dataUrl;
-                // rebuild this row
-                const tr = ctx.td.closest('tr');
-                if (tr) {
-                    const newTr = renderRow(c);
-                    tr.replaceWith(newTr);
-                }
-                state.pendingImageCell = null;
-                markDirty();
-            };
+            reader.onload = () => { applyImageDataUrl(reader.result); };
             reader.readAsDataURL(f);
         });
+
+        function setPasteHighlight(td) {
+            clearPasteHighlight();
+            td.classList.add('pasting');
+        }
+        function clearPasteHighlight() {
+            document.querySelectorAll('td.img-cell.pasting').forEach(el => el.classList.remove('pasting'));
+        }
+
+        // ---- Clipboard paste (image only) ----
+        document.addEventListener('paste', (ev) => {
+            if (!state.pendingImageCell) return;
+            const items = (ev.clipboardData && ev.clipboardData.items) || [];
+            for (const it of items) {
+                if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
+                    const blob = it.getAsFile();
+                    if (!blob) continue;
+                    ev.preventDefault();
+                    const reader = new FileReader();
+                    reader.onload = () => { applyImageDataUrl(reader.result); };
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        });
+
+        // Click outside any image cell clears the paste target
+        document.addEventListener('click', (ev) => {
+            if (!state.pendingImageCell) return;
+            const cell = ev.target.closest && ev.target.closest('td.img-cell');
+            if (cell !== state.pendingImageCell.td) {
+                state.pendingImageCell = null;
+                clearPasteHighlight();
+            }
+        }, true);
 
         // ---- Overlay ----
         let overlay = null;
@@ -502,7 +601,16 @@
             if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
             overlay = null;
         }
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closeOverlay();
+                if (state.pendingImageCell) {
+                    state.pendingImageCell = null;
+                    clearPasteHighlight();
+                    setStatus('已取消貼上');
+                }
+            }
+        });
 
         // ---- Theme ----
         $('#themeToggle').addEventListener('click', () => {
