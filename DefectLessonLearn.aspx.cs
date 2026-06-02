@@ -4,7 +4,16 @@ using System.Web;
 
 public partial class DefectLessonLearn : System.Web.UI.Page
 {
-    private const string DataRelPath = "~/App_Data/defect_lessons.json";
+    // Filename relative to the .aspx page's own folder (NOT the /PoC app root).
+    // We resolve via Request.PhysicalPath so this works regardless of whether
+    // /lesson_learn is configured as an IIS Application or just a sub-folder.
+    private const string DataFileName = "App_Data\\defect_lessons.json";
+
+    private string GetDataFilePath()
+    {
+        string pageDir = Path.GetDirectoryName(Request.PhysicalPath);
+        return Path.Combine(pageDir, DataFileName);
+    }
 
     protected void Page_Load(object sender, EventArgs e)
     {
@@ -20,7 +29,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         Response.ContentType = "application/json; charset=utf-8";
         Response.Cache.SetCacheability(HttpCacheability.NoCache);
 
-        string path = Server.MapPath(DataRelPath);
+        string path = GetDataFilePath();
         string dir = Path.GetDirectoryName(path);
 
         try
@@ -29,7 +38,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             {
                 if (!File.Exists(path))
                 {
-                    Response.Write("{\"cases\":[]}");
+                    Response.Write("{\"cases\":[],\"_debug_path\":\"" + Escape(path) + "\"}");
                 }
                 else
                 {
