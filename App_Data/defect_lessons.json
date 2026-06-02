@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "id": "case-2025-03-26-001",
+      "waferMap": "",
+      "image": "",
+      "date": "2025/3/26",
+      "category": "Low yield M22 W/E MBIST fail",
+      "link": "",
+      "parts": "地震 over Q time",
+      "rootCause": "M22 W/E MBIST fail CONT open and NiSi loss induce MBIST Fail Suspect long Q-time between “SMT SIN Dep. to SINREM” induce oxidation & NiSi loss",
+      "entityRecipe": "SMT Q-time window",
+      "equipment": "SMT Q-time window",
+      "impact": "2lots 18pcs",
+      "generation": "M22",
+      "productModel": "AAQ3 AFH7",
+      "defectType": "MBIST fail",
+      "map": "edge",
+      "edx": "NA",
+      "waferTrend": "連續片",
+      "position": "",
+      "other": "PEI7/李世欽"
+    }
+  ]
+}
