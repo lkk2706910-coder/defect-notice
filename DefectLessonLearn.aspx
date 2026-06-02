@@ -158,10 +158,129 @@
             font-size: 12px;
             letter-spacing: .02em;
             white-space: nowrap;
+            z-index: 2;
+            padding: 0;
+        }
+        table.cases thead th[data-col] .th-inner {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 8px;
+            cursor: pointer;
+            user-select: none;
+            overflow: hidden;
+        }
+        table.cases thead th[data-col] .th-label {
+            flex: 1; min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
-            z-index: 2;
         }
+        table.cases thead th[data-col] .th-sort {
+            font-size: 9px; opacity: 0.35;
+            line-height: 1;
+        }
+        table.cases thead th[data-col].sort-asc .th-sort,
+        table.cases thead th[data-col].sort-desc .th-sort {
+            opacity: 1;
+            color: var(--accent);
+        }
+        table.cases thead th[data-col] .th-filter {
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: transparent;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1;
+            padding: 1px 4px;
+            cursor: pointer;
+        }
+        table.cases thead th[data-col] .th-filter:hover {
+            background: var(--chip);
+            color: var(--text);
+        }
+        table.cases thead th[data-col].filtered .th-filter {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* Filter popover */
+        .filter-pop {
+            position: absolute;
+            z-index: 9000;
+            background: var(--panel-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+            padding: 8px;
+            width: 260px;
+            font-size: 12px;
+            color: var(--text);
+        }
+        .filter-pop input.filter-search {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 12px;
+            margin-bottom: 6px;
+            outline: none;
+        }
+        .filter-pop input.filter-search:focus { border-color: var(--accent); }
+        .filter-pop .filter-list {
+            max-height: 220px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--panel);
+        }
+        .filter-pop .filter-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--tint-low);
+        }
+        .filter-pop .filter-item:last-child { border-bottom: none; }
+        .filter-pop .filter-item:hover { background: var(--row-hover); }
+        .filter-pop .filter-item input[type="checkbox"] { margin: 0; }
+        .filter-pop .filter-item .filter-label {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .filter-pop .filter-item .filter-count {
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .filter-pop .filter-empty {
+            color: var(--muted);
+            text-align: center;
+            padding: 14px;
+            font-style: italic;
+        }
+        .filter-pop .filter-toolbar {
+            display: flex; gap: 6px;
+            margin: 6px 0 0 0;
+        }
+        .filter-pop .filter-toolbar .ftb {
+            font-size: 11px;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--tint-low);
+            color: var(--text);
+            cursor: pointer;
+            flex: 1;
+        }
+        .filter-pop .filter-toolbar .ftb:hover { background: var(--chip); border-color: var(--accent); }
+        .filter-pop .filter-toolbar .ftb.primary { background: var(--accent); color: white; border-color: var(--accent); }
+        .filter-pop .filter-toolbar .ftb.primary:hover { background: var(--accent-strong); }
+
         table.cases tbody tr:hover td { background: var(--row-hover); }
         table.cases tbody td {
             background: transparent;
@@ -332,6 +451,7 @@
             <div class="toolbar">
                 <input type="search" id="searchInput" class="search" placeholder="搜尋任一欄位文字..." />
                 <button type="button" id="btnAdd" class="btn btn-primary">+ 新增 Case</button>
+                <button type="button" id="btnClearFilters" class="btn" title="清除所有排序與篩選">↻ 清除篩選</button>
                 <button type="button" id="btnSave" class="btn">儲存</button>
                 <button type="button" id="themeToggle" class="theme-toggle" title="切換深色 / 淺色">
                     <span class="theme-toggle-icon"></span>
@@ -344,25 +464,25 @@
         <div class="table-wrap">
             <table class="cases" id="tbl">
                 <thead>
-                    <tr>
+                    <tr id="theadRow">
                         <th class="col-img">Wafer map</th>
                         <th class="col-img">Image</th>
-                        <th class="col-date">時間</th>
-                        <th class="col-cat">異常類別</th>
-                        <th class="col-link">Link</th>
-                        <th class="col-parts">異常 parts</th>
-                        <th class="col-root">Root cause &amp; Action</th>
-                        <th class="col-entity">Entity / Recipe</th>
-                        <th class="col-eqp">異常機台</th>
-                        <th class="col-impact">Impact / 報廢</th>
-                        <th class="col-gen">Generation</th>
-                        <th class="col-model">產品型號</th>
-                        <th class="col-defect">Defect type</th>
-                        <th class="col-map">Map</th>
-                        <th class="col-edx">EDX</th>
-                        <th class="col-trend">Wafer Trend</th>
-                        <th class="col-pos">對應位置</th>
-                        <th class="col-other">其他特徵</th>
+                        <th class="col-date" data-col="date">時間</th>
+                        <th class="col-cat" data-col="category">異常類別</th>
+                        <th class="col-link" data-col="link">Link</th>
+                        <th class="col-parts" data-col="parts">異常 parts</th>
+                        <th class="col-root" data-col="rootCause">Root cause &amp; Action</th>
+                        <th class="col-entity" data-col="entityRecipe">Entity / Recipe</th>
+                        <th class="col-eqp" data-col="equipment">異常機台</th>
+                        <th class="col-impact" data-col="impact">Impact / 報廢</th>
+                        <th class="col-gen" data-col="generation">Generation</th>
+                        <th class="col-model" data-col="productModel">產品型號</th>
+                        <th class="col-defect" data-col="defectType">Defect type</th>
+                        <th class="col-map" data-col="map">Map</th>
+                        <th class="col-edx" data-col="edx">EDX</th>
+                        <th class="col-trend" data-col="waferTrend">Wafer Trend</th>
+                        <th class="col-pos" data-col="position">對應位置</th>
+                        <th class="col-other" data-col="other">其他特徵</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -560,15 +680,79 @@
             });
         }
 
+        // ---- Sort + Filter state ----
+        // state.sort = { key, dir: 'asc' | 'desc' | null }
+        // state.filters[key] = Set<value>  (if absent or empty -> no filter)
+        state.sort = { key: null, dir: null };
+        state.filters = {};
+
+        function parseDateValue(s) {
+            const m = String(s || '').match(/(\d{4})\D+(\d{1,2})(?:\D+(\d{1,2}))?/);
+            if (!m) return NaN;
+            const y = parseInt(m[1], 10);
+            const mo = parseInt(m[2], 10) || 1;
+            const d = parseInt(m[3], 10) || 1;
+            return new Date(y, mo - 1, d).getTime();
+        }
+        function sortRows(rows, key, dir) {
+            const factor = dir === 'desc' ? -1 : 1;
+            const isDateCol = (key === 'date');
+            return rows.slice().sort((a, b) => {
+                const va = (a[key] == null) ? '' : String(a[key]);
+                const vb = (b[key] == null) ? '' : String(b[key]);
+                if (isDateCol) {
+                    const da = parseDateValue(va);
+                    const db = parseDateValue(vb);
+                    if (!isNaN(da) && !isNaN(db)) return factor * (da - db);
+                }
+                const na = parseFloat(va.replace(/[, ]/g, ''));
+                const nb = parseFloat(vb.replace(/[, ]/g, ''));
+                if (!isNaN(na) && !isNaN(nb) && va.match(/\d/) && vb.match(/\d/)) {
+                    if (na !== nb) return factor * (na - nb);
+                }
+                return factor * va.localeCompare(vb, 'zh-Hant', { numeric: true });
+            });
+        }
+        function filterRows(rows) {
+            const keys = Object.keys(state.filters);
+            if (keys.length === 0) return rows;
+            return rows.filter(c => {
+                for (const k of keys) {
+                    const set = state.filters[k];
+                    if (set && set.size > 0) {
+                        if (!set.has(c[k] || '')) return false;
+                    }
+                }
+                return true;
+            });
+        }
+        function getVisibleCases() {
+            let rows = state.cases.slice();
+            rows = filterRows(rows);
+            const q = (searchInput.value || '').trim().toLowerCase();
+            if (q) rows = rows.filter(c => matchSearch(c, q));
+            if (state.sort.key && state.sort.dir) {
+                rows = sortRows(rows, state.sort.key, state.sort.dir);
+            }
+            return rows;
+        }
+
         function renderAll() {
             tbody.innerHTML = '';
-            const q = (searchInput.value || '').trim().toLowerCase();
             const fragments = document.createDocumentFragment();
-            state.cases.forEach(c => {
-                if (q && !matchSearch(c, q)) return;
-                fragments.appendChild(renderRow(c));
-            });
+            getVisibleCases().forEach(c => fragments.appendChild(renderRow(c)));
             tbody.appendChild(fragments);
+            updateStatusCount();
+        }
+
+        function updateStatusCount() {
+            const total = state.cases.length;
+            const shown = getVisibleCases().length;
+            if (shown === total) {
+                setStatus('共 ' + total + ' 筆');
+            } else {
+                setStatus('顯示 ' + shown + ' / ' + total + ' 筆', 'dirty');
+            }
         }
 
         function matchSearch(c, q) {
@@ -579,6 +763,154 @@
             }
             return false;
         }
+
+        // ---- Decorate <th data-col="..."> with sort indicator + filter button ----
+        function decorateHeaders() {
+            document.querySelectorAll('#theadRow th[data-col]').forEach(th => {
+                const key = th.getAttribute('data-col');
+                const label = th.textContent.trim();
+                th.innerHTML =
+                    '<div class="th-inner">' +
+                        '<span class="th-label">' + escapeHtml(label) + '</span>' +
+                        '<span class="th-sort">▲▼</span>' +
+                        '<button type="button" class="th-filter" data-act="filter" title="篩選">▾</button>' +
+                    '</div>';
+                // sort click on the inner area (not the filter button)
+                th.querySelector('.th-inner').addEventListener('click', (ev) => {
+                    if (ev.target.closest('[data-act="filter"]')) return;
+                    cycleSort(key, th);
+                });
+                th.querySelector('[data-act="filter"]').addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    openFilterPopover(key, th);
+                });
+            });
+        }
+        function cycleSort(key, th) {
+            if (state.sort.key === key) {
+                state.sort.dir = state.sort.dir === 'asc' ? 'desc'
+                              : state.sort.dir === 'desc' ? null : 'asc';
+                if (!state.sort.dir) state.sort.key = null;
+            } else {
+                state.sort.key = key;
+                state.sort.dir = 'asc';
+            }
+            // update visual on all headers
+            document.querySelectorAll('#theadRow th[data-col]').forEach(t => {
+                t.classList.remove('sort-asc', 'sort-desc');
+                const sortEl = t.querySelector('.th-sort');
+                if (sortEl) sortEl.textContent = '▲▼';
+            });
+            if (state.sort.key) {
+                const t = document.querySelector('#theadRow th[data-col="' + state.sort.key + '"]');
+                if (t) {
+                    t.classList.add(state.sort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+                    const sortEl = t.querySelector('.th-sort');
+                    if (sortEl) sortEl.textContent = state.sort.dir === 'asc' ? '▲' : '▼';
+                }
+            }
+            renderAll();
+        }
+
+        // ---- Filter popover ----
+        let activePopover = null;
+        function closeFilterPopover() {
+            if (activePopover && activePopover.parentNode) activePopover.parentNode.removeChild(activePopover);
+            activePopover = null;
+        }
+        function openFilterPopover(key, anchor) {
+            closeFilterPopover();
+            // distinct values, sorted; preserve insertion order with stable sort
+            const counts = new Map();
+            state.cases.forEach(c => {
+                const v = c[key] || '';
+                counts.set(v, (counts.get(v) || 0) + 1);
+            });
+            const values = [...counts.keys()].sort((a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true }));
+            const filtSet = state.filters[key]; // may be undefined (= all checked)
+
+            const pop = document.createElement('div');
+            pop.className = 'filter-pop';
+            const rect = anchor.getBoundingClientRect();
+            pop.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+            pop.style.left = (rect.left + window.scrollX) + 'px';
+            const itemsHtml = values.length === 0
+                ? '<div class="filter-empty">無資料</div>'
+                : values.map((v, i) => {
+                    const checked = (!filtSet || filtSet.has(v));
+                    const lbl = v === '' ? '<em style="opacity:.6">(空)</em>' : escapeHtml(v);
+                    return '<label class="filter-item">' +
+                        '<input type="checkbox" value="' + i + '"' + (checked ? ' checked' : '') + '/>' +
+                        '<span class="filter-label" title="' + escapeHtml(v) + '">' + lbl + '</span>' +
+                        '<span class="filter-count">' + counts.get(v) + '</span>' +
+                        '</label>';
+                }).join('');
+            pop.innerHTML =
+                '<input type="text" class="filter-search" placeholder="搜尋值..." />' +
+                '<div class="filter-list">' + itemsHtml + '</div>' +
+                '<div class="filter-toolbar">' +
+                    '<button type="button" class="ftb" data-act="all">全選</button>' +
+                    '<button type="button" class="ftb" data-act="none">清除</button>' +
+                    '<button type="button" class="ftb primary" data-act="apply">套用</button>' +
+                '</div>';
+
+            document.body.appendChild(pop);
+            activePopover = pop;
+
+            const searchEl = pop.querySelector('.filter-search');
+            const listEl = pop.querySelector('.filter-list');
+            const items = pop.querySelectorAll('.filter-item');
+
+            searchEl.addEventListener('input', () => {
+                const q = searchEl.value.trim().toLowerCase();
+                items.forEach((it, i) => {
+                    const v = values[i];
+                    const visible = !q || v.toLowerCase().indexOf(q) >= 0;
+                    it.style.display = visible ? '' : 'none';
+                });
+            });
+            searchEl.focus();
+
+            pop.querySelector('[data-act="all"]').addEventListener('click', () => {
+                items.forEach(it => {
+                    if (it.style.display !== 'none') it.querySelector('input[type=checkbox]').checked = true;
+                });
+            });
+            pop.querySelector('[data-act="none"]').addEventListener('click', () => {
+                items.forEach(it => {
+                    if (it.style.display !== 'none') it.querySelector('input[type=checkbox]').checked = false;
+                });
+            });
+            pop.querySelector('[data-act="apply"]').addEventListener('click', () => {
+                const allChecked = [];
+                let anyUnchecked = false;
+                items.forEach((it, i) => {
+                    if (it.querySelector('input[type=checkbox]').checked) {
+                        allChecked.push(values[i]);
+                    } else {
+                        anyUnchecked = true;
+                    }
+                });
+                if (!anyUnchecked) {
+                    delete state.filters[key]; // no filter == all values pass
+                } else {
+                    state.filters[key] = new Set(allChecked);
+                }
+                // update header visual
+                const th = document.querySelector('#theadRow th[data-col="' + key + '"]');
+                if (th) th.classList.toggle('filtered', !!state.filters[key]);
+                closeFilterPopover();
+                renderAll();
+            });
+        }
+        // click outside / ESC closes popover
+        document.addEventListener('mousedown', (ev) => {
+            if (!activePopover) return;
+            if (activePopover.contains(ev.target)) return;
+            // also ignore clicks on the filter buttons themselves (they reopen)
+            if (ev.target.closest && ev.target.closest('[data-act="filter"]')) return;
+            closeFilterPopover();
+        }, true);
 
         // ---- Image upload (file -> base64) ----
         function applyImageDataUrl(dataUrl) {
@@ -660,6 +992,7 @@
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 closeOverlay();
+                closeFilterPopover();
                 if (state.pendingImageCell) {
                     state.pendingImageCell = null;
                     clearPasteHighlight();
@@ -684,8 +1017,23 @@
             const c = { id: uid() };
             COLUMNS.forEach(col => { c[col.key] = ''; });
             state.cases.unshift(c);
+            // clear filters so the new empty row is visible (otherwise looks like add did nothing)
+            state.filters = {};
+            document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
             renderAll();
             markDirty();
+        });
+
+        // ---- Clear all sort/filter ----
+        $('#btnClearFilters').addEventListener('click', () => {
+            state.sort = { key: null, dir: null };
+            state.filters = {};
+            document.querySelectorAll('#theadRow th[data-col]').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc', 'filtered');
+                const sortEl = th.querySelector('.th-sort');
+                if (sortEl) sortEl.textContent = '▲▼';
+            });
+            renderAll();
         });
 
         // ---- Save ----
@@ -723,8 +1071,8 @@
                 state.cases = Array.isArray(data.cases) ? data.cases : [];
                 // ensure each has an id
                 state.cases.forEach(c => { if (!c.id) c.id = uid(); });
+                decorateHeaders();
                 renderAll();
-                setStatus('共 ' + state.cases.length + ' 筆');
             } catch (e) {
                 setStatus('載入失敗: ' + e.message, 'error');
             }
