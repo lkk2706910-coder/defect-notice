@@ -235,11 +235,47 @@
         td .cell-text { white-space: pre-wrap; word-break: break-word; min-height: 18px; }
         td.editable .cell-text { cursor: text; }
         td.editable .cell-text:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--input-bg); }
-        td .link {
-            color: var(--link);
-            text-decoration: underline;
-            word-break: break-all;
-            display: inline-block;
+        /* contenteditable placeholder for empty cells */
+        td .cell-text[data-placeholder]:empty::before {
+            content: attr(data-placeholder);
+            color: var(--muted);
+            opacity: 0.55;
+            font-style: italic;
+        }
+        td.link-cell {
+            text-align: center;
+            white-space: nowrap;
+        }
+        td.link-cell .link-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px; height: 28px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 16px;
+            line-height: 1;
+            background: var(--chip);
+            border: 1px solid var(--border);
+            transition: background .15s, border-color .15s;
+        }
+        td.link-cell .link-icon:hover {
+            background: var(--chip-active-bg);
+            border-color: var(--chip-active-border);
+        }
+        td.link-cell .mini-btn {
+            margin-left: 4px;
+            font-size: 11px;
+            padding: 2px 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--tint-low);
+            color: var(--text);
+            cursor: pointer;
+        }
+        td.link-cell .mini-btn:hover {
+            background: var(--chip);
+            border-color: var(--accent);
         }
 
         /* Image overlay */
@@ -397,6 +433,16 @@
                 .replace(/"/g, '&quot;');
         }
 
+        // Add https:// if the user pasted something without a scheme
+        // (so "p58esigp01/foo" still resolves to an absolute external link)
+        function normalizeUrl(raw) {
+            const s = String(raw || '').trim();
+            if (!s) return '';
+            if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return s;       // already has scheme
+            if (s.startsWith('//')) return 'https:' + s;
+            return 'https://' + s;
+        }
+
         function renderRow(c) {
             const tr = document.createElement('tr');
             tr.setAttribute('data-id', c.id);
@@ -447,17 +493,25 @@
                         }
                     });
                 } else if (col.kind === 'link') {
-                    td.className = 'editable';
+                    td.className = 'link-cell';
                     const v = c[col.key] || '';
                     if (v) {
-                        td.innerHTML = '<a class="link" target="_blank" rel="noopener noreferrer" href="' + escapeHtml(v) + '">' + escapeHtml(v) + '</a>';
+                        const safeHref = escapeHtml(normalizeUrl(v));
+                        const safeTitle = escapeHtml(v);
+                        td.innerHTML =
+                            '<a class="link-icon" target="_blank" rel="noopener noreferrer" href="' + safeHref + '" title="' + safeTitle + '">🔗</a>' +
+                            '<button type="button" class="mini-btn" data-act="edit-link" title="編輯連結">✎</button>';
                     } else {
-                        td.innerHTML = '<div class="cell-text" contenteditable="true" data-key="' + col.key + '"></div>';
+                        td.innerHTML = '<div class="cell-text" contenteditable="true" data-key="' + col.key + '" data-placeholder="貼上連結"></div>';
                     }
-                    td.addEventListener('dblclick', () => {
+                    td.addEventListener('click', (ev) => {
+                        const btn = ev.target.closest && ev.target.closest('[data-act="edit-link"]');
+                        if (!btn) return;
                         td.innerHTML = '<div class="cell-text" contenteditable="true" data-key="' + col.key + '">' + escapeHtml(v) + '</div>';
                         const ce = td.querySelector('.cell-text');
                         ce.focus();
+                        // select all so user can replace easily
+                        document.execCommand && document.execCommand('selectAll', false, null);
                         wireEditable(ce, c);
                     });
                 } else {
