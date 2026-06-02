@@ -152,14 +152,18 @@
         }
         table.cases thead th {
             position: sticky; top: 0;
-            background: var(--tint-med);
+            /* Solid background — semi-transparent tint over scrolling rows
+               would show row text through the header. Use --panel-elevated
+               so the header stays opaque while still looking like a header. */
+            background: var(--panel-elevated);
             color: var(--text);
             font-weight: 800;
             font-size: 12px;
             letter-spacing: .02em;
             white-space: nowrap;
-            z-index: 2;
+            z-index: 3;
             padding: 0;
+            box-shadow: 0 1px 0 var(--border);
         }
         table.cases thead th[data-col] .th-inner {
             display: flex;
@@ -286,26 +290,58 @@
             background: transparent;
         }
         td.img-cell {
-            width: 110px;
-            min-width: 110px;
+            width: 130px;
+            min-width: 130px;
             text-align: center;
             position: relative;
-        }
-        td.img-cell img {
-            max-width: 100px; max-height: 120px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            cursor: zoom-in;
         }
         td.img-cell.pasting {
             outline: 2px dashed var(--accent);
             outline-offset: -2px;
             background: var(--row-hover);
         }
+        td.img-cell .img-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            justify-content: center;
+            margin: 0 auto 6px auto;
+            max-width: 120px;
+        }
+        td.img-cell .img-thumb {
+            position: relative;
+            display: inline-block;
+            line-height: 0;
+        }
+        td.img-cell .img-thumb img {
+            width: 56px; height: 56px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            cursor: zoom-in;
+            display: block;
+        }
+        td.img-cell .img-thumb .thumb-x {
+            position: absolute;
+            top: -6px; right: -6px;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--danger, #ef4444);
+            color: white;
+            border: 1px solid var(--panel);
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 15px;
+            padding: 0;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity .12s;
+        }
+        td.img-cell .img-thumb:hover .thumb-x { opacity: 1; }
         td.img-cell .img-actions {
             display: flex; flex-direction: column; gap: 4px;
             align-items: stretch;
-            width: 100px;
+            width: 110px;
             margin: 0 auto;
         }
         td.img-cell .img-actions .mini-btn {
@@ -466,7 +502,7 @@
         [data-theme="dark"] .theme-toggle-label::before { content: 'Light'; }
         [data-theme="light"] .theme-toggle-label::before { content: 'Dark'; }
 
-        .col-img { min-width: 110px; }
+        .col-img { min-width: 130px; }
         .col-date { min-width: 100px; }
         .col-cat { min-width: 140px; }
         .col-link { min-width: 90px; }
@@ -619,6 +655,13 @@
             return (arr || []).map(s => String(s || '').trim()).filter(Boolean).join('\n');
         }
 
+        // Parse an image field (array of data URLs, or legacy single string) into an array.
+        function parseImages(raw) {
+            if (Array.isArray(raw)) return raw.filter(s => typeof s === 'string' && s.length > 0);
+            if (typeof raw === 'string' && raw.length > 0) return [raw];
+            return [];
+        }
+
         function renderRow(c) {
             const tr = document.createElement('tr');
             tr.setAttribute('data-id', c.id);
@@ -627,24 +670,38 @@
                 const td = document.createElement('td');
                 if (col.kind === 'img') {
                     td.className = 'img-cell';
-                    const v = c[col.key] || '';
-                    if (v) {
-                        td.innerHTML =
-                            '<img alt="' + col.key + '" src="' + v + '"/>' +
-                            '<div class="img-replace">' +
-                                '<button type="button" class="mini-btn" data-act="replace">更換</button>' +
-                                '<button type="button" class="mini-btn" data-act="remove">移除</button>' +
-                            '</div>';
-                    } else {
-                        td.innerHTML =
-                            '<div class="img-actions">' +
-                                '<button type="button" class="mini-btn" data-act="upload">📁 選檔</button>' +
-                                '<button type="button" class="mini-btn" data-act="paste">📋 貼上</button>' +
-                                '<div style="font-size:10px; color:var(--muted); margin-top:2px;">' + col.key + '</div>' +
-                            '</div>';
+                    const imgs = parseImages(c[col.key]);
+                    let html = '';
+                    if (imgs.length > 0) {
+                        html += '<div class="img-grid">' + imgs.map((src, i) =>
+                            '<div class="img-thumb">' +
+                                '<img alt="' + col.key + '" src="' + src + '"/>' +
+                                '<button type="button" class="thumb-x" data-act="remove" data-idx="' + i + '" title="移除這張">×</button>' +
+                            '</div>'
+                        ).join('') + '</div>';
                     }
+                    html += '<div class="img-actions">' +
+                        '<button type="button" class="mini-btn" data-act="upload">📁 選檔</button>' +
+                        '<button type="button" class="mini-btn" data-act="paste">📋 貼上</button>' +
+                        (imgs.length >= 2 ? '<button type="button" class="mini-btn" data-act="remove-all">全清</button>' : '') +
+                        (imgs.length === 0 ? '<div style="font-size:10px; color:var(--muted); margin-top:2px;">' + col.key + '</div>' : '') +
+                    '</div>';
+                    td.innerHTML = html;
                     td.addEventListener('click', (ev) => {
-                        // Click on image -> overlay viewer
+                        // × on a thumb -> remove that one
+                        const xBtn = ev.target.closest && ev.target.closest('.thumb-x');
+                        if (xBtn) {
+                            ev.stopPropagation();
+                            const idx = parseInt(xBtn.getAttribute('data-idx'), 10);
+                            const arr = parseImages(c[col.key]);
+                            arr.splice(idx, 1);
+                            c[col.key] = arr;
+                            markDirty();
+                            const newTr = renderRow(c);
+                            tr.replaceWith(newTr);
+                            return;
+                        }
+                        // Click on a thumb image -> overlay viewer
                         if (ev.target.tagName === 'IMG') {
                             openOverlay(ev.target.src);
                             return;
@@ -652,7 +709,7 @@
                         const btn = ev.target.closest && ev.target.closest('[data-act]');
                         if (!btn) return;
                         const act = btn.getAttribute('data-act');
-                        if (act === 'upload' || act === 'replace') {
+                        if (act === 'upload') {
                             state.pendingImageCell = { id: c.id, key: col.key, td: td };
                             clearPasteHighlight();
                             hiddenFile.value = '';
@@ -660,9 +717,10 @@
                         } else if (act === 'paste') {
                             state.pendingImageCell = { id: c.id, key: col.key, td: td };
                             setPasteHighlight(td);
-                            setStatus('已選定 ' + col.key + ' 欄,請按 Ctrl+V 貼上剪貼簿的圖片', 'dirty');
-                        } else if (act === 'remove') {
-                            c[col.key] = '';
+                            setStatus('已選定 ' + col.key + ',按 Ctrl+V 貼上(可連續貼多張)', 'dirty');
+                        } else if (act === 'remove-all') {
+                            if (!confirm('清掉這格全部圖片?')) return;
+                            c[col.key] = [];
                             markDirty();
                             const newTr = renderRow(c);
                             tr.replaceWith(newTr);
@@ -1041,30 +1099,53 @@
             }
         }, true);
 
-        // ---- Image upload (file -> base64) ----
-        function applyImageDataUrl(dataUrl) {
+        // ---- Image upload (file -> base64), append model ----
+        // Appends one or more data URLs to the target cell's image array.
+        // After rebuild, the pending cell's td is refreshed so a subsequent
+        // paste stays on the new DOM node.
+        function appendImageDataUrls(dataUrls, opts) {
+            opts = opts || {};
             const ctx = state.pendingImageCell;
             if (!ctx) return false;
             const c = state.cases.find(x => x.id === ctx.id);
             if (!c) return false;
-            c[ctx.key] = dataUrl;
-            const tr = ctx.td.closest('tr');
-            if (tr) {
+            const arr = parseImages(c[ctx.key]);
+            (Array.isArray(dataUrls) ? dataUrls : [dataUrls]).forEach(u => {
+                if (u) arr.push(u);
+            });
+            c[ctx.key] = arr;
+            const oldTr = ctx.td.closest('tr');
+            if (oldTr) {
                 const newTr = renderRow(c);
-                tr.replaceWith(newTr);
+                oldTr.replaceWith(newTr);
+                // Update td reference for continued paste mode
+                const colIdx = COLUMNS.findIndex(co => co.key === ctx.key);
+                if (colIdx >= 0 && newTr.children[colIdx]) {
+                    ctx.td = newTr.children[colIdx];
+                    if (opts.keepPasteMode) {
+                        setPasteHighlight(ctx.td);
+                    }
+                }
             }
-            state.pendingImageCell = null;
-            clearPasteHighlight();
             markDirty();
             return true;
         }
 
+        // Allow multi-select in the file picker
+        hiddenFile.setAttribute('multiple', 'multiple');
         hiddenFile.addEventListener('change', () => {
-            const f = hiddenFile.files && hiddenFile.files[0];
-            if (!f) return;
-            const reader = new FileReader();
-            reader.onload = () => { applyImageDataUrl(reader.result); };
-            reader.readAsDataURL(f);
+            const files = Array.from(hiddenFile.files || []);
+            if (!files.length || !state.pendingImageCell) return;
+            Promise.all(files.map(f => new Promise(resolve => {
+                const r = new FileReader();
+                r.onload = () => resolve(r.result);
+                r.onerror = () => resolve(null);
+                r.readAsDataURL(f);
+            }))).then(urls => {
+                appendImageDataUrls(urls.filter(Boolean), { keepPasteMode: false });
+                state.pendingImageCell = null;
+                clearPasteHighlight();
+            });
         });
 
         function setPasteHighlight(td) {
@@ -1076,6 +1157,8 @@
         }
 
         // ---- Clipboard paste (image only) ----
+        // Stays in paste mode after a successful paste so the user can press
+        // Ctrl+V repeatedly to append multiple images without re-clicking 貼上.
         document.addEventListener('paste', (ev) => {
             if (!state.pendingImageCell) return;
             const items = (ev.clipboardData && ev.clipboardData.items) || [];
@@ -1085,7 +1168,7 @@
                     if (!blob) continue;
                     ev.preventDefault();
                     const reader = new FileReader();
-                    reader.onload = () => { applyImageDataUrl(reader.result); };
+                    reader.onload = () => { appendImageDataUrls(reader.result, { keepPasteMode: true }); };
                     reader.readAsDataURL(blob);
                     return;
                 }
