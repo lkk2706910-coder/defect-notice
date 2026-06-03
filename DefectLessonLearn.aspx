@@ -422,14 +422,15 @@
         td.link-cell {
             text-align: center;
             white-space: nowrap;
+            min-width: 110px;
         }
         td.link-cell .link-row {
-            display: inline-flex;
-            flex-wrap: wrap;
+            display: inline-grid;
+            grid-template-columns: repeat(2, 1fr);
             gap: 4px;
-            justify-content: center;
             vertical-align: middle;
             max-width: calc(100% - 30px);
+            min-width: 80px;
         }
         td.link-cell .link-icon {
             display: inline-flex;
@@ -586,7 +587,7 @@
         .col-img { min-width: 130px; }
         .col-date { min-width: 100px; }
         .col-cat { min-width: 140px; }
-        .col-link { min-width: 90px; }
+        .col-link { min-width: 110px; }
         .col-parts { min-width: 110px; }
         .col-root { min-width: 240px; max-width: 360px; }
         .col-entity { min-width: 150px; }
