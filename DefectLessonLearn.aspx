@@ -162,12 +162,17 @@
             letter-spacing: .02em;
             white-space: nowrap;
             z-index: 3;
-            padding: 0;
+            padding: 6px 8px;
+            text-align: center;     /* center plain-text headers (Wafer map, Image, etc.) */
             box-shadow: 0 1px 0 var(--border);
+        }
+        table.cases thead th[data-col] {
+            padding: 0;             /* sortable headers use their own inner padding */
         }
         table.cases thead th[data-col] .th-inner {
             display: flex;
             align-items: center;
+            justify-content: center; /* center the label + icons */
             gap: 4px;
             padding: 6px 8px;
             cursor: pointer;
@@ -175,9 +180,10 @@
             overflow: hidden;
         }
         table.cases thead th[data-col] .th-label {
-            flex: 1; min-width: 0;
+            min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
+            text-align: center;
         }
         table.cases thead th[data-col] .th-sort {
             font-size: 9px; opacity: 0.35;
