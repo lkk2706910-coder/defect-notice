@@ -290,8 +290,8 @@
             background: transparent;
         }
         td.img-cell {
-            min-width: 150px;
-            width: 150px;
+            min-width: 190px;
+            width: 190px;
             text-align: center;
             position: relative;
             cursor: pointer;
@@ -312,18 +312,18 @@
             gap: 4px;
             justify-content: center;
             margin: 0 auto 4px auto;
-            max-width: 140px;
+            max-width: 180px;
         }
         td.img-cell .img-thumb {
             position: relative;
             display: inline-block;
             line-height: 0;
-            flex: 0 0 60px;     /* don't shrink — every thumb stays this size */
-            width: 60px;
-            height: 60px;
+            flex: 0 0 80px;     /* don't shrink — every thumb stays this size */
+            width: 80px;
+            height: 80px;
         }
         td.img-cell .img-thumb img {
-            width: 60px; height: 60px;
+            width: 80px; height: 80px;
             object-fit: cover;
             border-radius: 4px;
             border: 1px solid var(--border);
@@ -352,7 +352,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 60px;
+            height: 80px;
             font-size: 11px;
             color: var(--muted);
             border: 1px dashed var(--border);
@@ -584,7 +584,7 @@
         [data-theme="dark"] .theme-toggle-label::before { content: 'Light'; }
         [data-theme="light"] .theme-toggle-label::before { content: 'Dark'; }
 
-        .col-img { min-width: 130px; }
+        .col-img { min-width: 190px; }
         .col-date { min-width: 100px; }
         .col-cat { min-width: 140px; }
         .col-link { min-width: 110px; }
