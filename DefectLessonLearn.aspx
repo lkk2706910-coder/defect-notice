@@ -290,31 +290,40 @@
             background: transparent;
         }
         td.img-cell {
-            width: 130px;
-            min-width: 130px;
+            min-width: 150px;
+            width: 150px;
             text-align: center;
             position: relative;
+            cursor: pointer;
         }
         td.img-cell.pasting {
             outline: 2px dashed var(--accent);
             outline-offset: -2px;
             background: var(--row-hover);
         }
+        td.img-cell.drop-target {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+            background: var(--chip-active-bg);
+        }
         td.img-cell .img-grid {
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
             justify-content: center;
-            margin: 0 auto 6px auto;
-            max-width: 120px;
+            margin: 0 auto 4px auto;
+            max-width: 140px;
         }
         td.img-cell .img-thumb {
             position: relative;
             display: inline-block;
             line-height: 0;
+            flex: 0 0 60px;     /* don't shrink — every thumb stays this size */
+            width: 60px;
+            height: 60px;
         }
         td.img-cell .img-thumb img {
-            width: 56px; height: 56px;
+            width: 60px; height: 60px;
             object-fit: cover;
             border-radius: 4px;
             border: 1px solid var(--border);
@@ -338,25 +347,38 @@
             transition: opacity .12s;
         }
         td.img-cell .img-thumb:hover .thumb-x { opacity: 1; }
-        td.img-cell .img-actions {
-            display: flex; flex-direction: column; gap: 4px;
-            align-items: stretch;
-            width: 110px;
-            margin: 0 auto;
-        }
-        td.img-cell .img-actions .mini-btn {
+        td.img-cell .img-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60px;
             font-size: 11px;
-            padding: 4px 6px;
-            border: 1px solid var(--border);
+            color: var(--muted);
+            border: 1px dashed var(--border);
             border-radius: 6px;
-            background: var(--tint-low);
+            margin: 6px;
+            user-select: none;
+        }
+        td.img-cell .img-empty .img-empty-icon { font-size: 18px; margin-bottom: 2px; }
+        td.img-cell.pasting .img-empty,
+        td.img-cell:hover .img-empty {
             color: var(--text);
+            border-color: var(--accent);
+        }
+        td.img-cell .img-clear {
+            display: inline-block;
+            font-size: 10px;
+            color: var(--muted);
+            padding: 2px 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--tint-low);
             cursor: pointer;
         }
-        td.img-cell .img-actions .mini-btn:hover {
-            background: var(--chip);
-            border-color: var(--accent);
-            color: var(--text);
+        td.img-cell .img-clear:hover {
+            color: var(--danger, #ef4444);
+            border-color: var(--danger, #ef4444);
         }
         td.img-cell .img-replace {
             position: absolute;
@@ -486,6 +508,65 @@
         .img-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
 
         /* Theme toggle */
+        .usage-hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            background: var(--panel-elevated);
+            color: var(--text);
+            font-size: 12px;
+        }
+        .usage-hint.collapsed { display: none; }
+        .usage-content {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px 18px;
+        }
+        .usage-tag {
+            font-weight: 800;
+            color: var(--accent);
+        }
+        .usage-item b { color: var(--text); }
+        .usage-hint kbd {
+            display: inline-block;
+            padding: 1px 6px;
+            font-family: inherit;
+            font-size: 11px;
+            color: var(--text);
+            background: var(--tint-med);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-shadow: 0 1px 0 var(--border);
+        }
+        .usage-close {
+            font-size: 16px;
+            line-height: 1;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .usage-close:hover { background: var(--tint-med); color: var(--text); }
+        .btn-help {
+            font-size: 13px;
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--chip);
+            color: var(--text);
+            cursor: pointer;
+        }
+        .btn-help:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
+
         .theme-toggle {
             display: inline-flex; align-items: center; gap: 6px;
             padding: 6px 12px;
@@ -531,12 +612,25 @@
                 <button type="button" id="btnAdd" class="btn btn-primary">+ 新增 Case</button>
                 <button type="button" id="btnClearFilters" class="btn" title="清除所有排序與篩選">↻ 清除篩選</button>
                 <button type="button" id="btnSave" class="btn">儲存</button>
+                <button type="button" id="btnHelp" class="btn-help" title="顯示操作提示" style="display:none;">?</button>
                 <button type="button" id="themeToggle" class="theme-toggle" title="切換深色 / 淺色">
                     <span class="theme-toggle-icon"></span>
                     <span class="theme-toggle-label"></span>
                 </button>
                 <span id="statusPill" class="status-pill">載入中...</span>
             </div>
+        </div>
+
+        <div class="usage-hint" id="usageHint">
+            <div class="usage-content">
+                <span class="usage-tag">💡 操作提示</span>
+                <span class="usage-item"><b>圖片</b>:點該格 → <kbd>Ctrl</kbd>+<kbd>V</kbd> 貼上(可連續貼多張),或直接拖檔到該格</span>
+                <span class="usage-item"><b>連結</b>:點 <kbd>✎</kbd> 編輯,每行一個 URL</span>
+                <span class="usage-item"><b>排序</b>:點欄位標題(▲ 升 / ▼ 降 / 再點取消)</span>
+                <span class="usage-item"><b>篩選</b>:點欄位標題旁 <kbd>▾</kbd>,下拉多選 + 文字搜尋</span>
+                <span class="usage-item"><b>文字</b>:點該格直接編輯</span>
+            </div>
+            <button type="button" class="usage-close" id="usageClose" title="關閉提示">×</button>
         </div>
 
         <div class="table-wrap">
@@ -569,7 +663,6 @@
         </div>
     </div>
 
-    <input type="file" id="hiddenFile" accept="image/*" style="display:none;" />
 
     <script>
         const COLUMNS = [
@@ -603,7 +696,6 @@
         const tbody = $('#tbody');
         const statusPill = $('#statusPill');
         const searchInput = $('#searchInput');
-        const hiddenFile = $('#hiddenFile');
 
         function setStatus(text, cls) {
             statusPill.className = 'status-pill ' + (cls || '');
@@ -679,13 +771,17 @@
                                 '<button type="button" class="thumb-x" data-act="remove" data-idx="' + i + '" title="移除這張">×</button>' +
                             '</div>'
                         ).join('') + '</div>';
+                        if (imgs.length >= 2) {
+                            html += '<button type="button" class="img-clear" data-act="remove-all">全清</button>';
+                        }
+                    } else {
+                        html =
+                            '<div class="img-empty">' +
+                                '<span class="img-empty-icon">📋</span>' +
+                                '<span>點此 + Ctrl+V</span>' +
+                                '<span style="font-size:10px;opacity:.7;">或拖曳圖檔</span>' +
+                            '</div>';
                     }
-                    html += '<div class="img-actions">' +
-                        '<button type="button" class="mini-btn" data-act="upload">📁 選檔</button>' +
-                        '<button type="button" class="mini-btn" data-act="paste">📋 貼上</button>' +
-                        (imgs.length >= 2 ? '<button type="button" class="mini-btn" data-act="remove-all">全清</button>' : '') +
-                        (imgs.length === 0 ? '<div style="font-size:10px; color:var(--muted); margin-top:2px;">' + col.key + '</div>' : '') +
-                    '</div>';
                     td.innerHTML = html;
                     td.addEventListener('click', (ev) => {
                         // × on a thumb -> remove that one
@@ -706,25 +802,49 @@
                             openOverlay(ev.target.src);
                             return;
                         }
-                        const btn = ev.target.closest && ev.target.closest('[data-act]');
-                        if (!btn) return;
-                        const act = btn.getAttribute('data-act');
-                        if (act === 'upload') {
-                            state.pendingImageCell = { id: c.id, key: col.key, td: td };
-                            clearPasteHighlight();
-                            hiddenFile.value = '';
-                            hiddenFile.click();
-                        } else if (act === 'paste') {
-                            state.pendingImageCell = { id: c.id, key: col.key, td: td };
-                            setPasteHighlight(td);
-                            setStatus('已選定 ' + col.key + ',按 Ctrl+V 貼上(可連續貼多張)', 'dirty');
-                        } else if (act === 'remove-all') {
+                        // Click "全清" button
+                        const clearBtn = ev.target.closest && ev.target.closest('[data-act="remove-all"]');
+                        if (clearBtn) {
+                            ev.stopPropagation();
                             if (!confirm('清掉這格全部圖片?')) return;
                             c[col.key] = [];
                             markDirty();
                             const newTr = renderRow(c);
                             tr.replaceWith(newTr);
+                            return;
                         }
+                        // Otherwise: clicking anywhere in the cell activates paste mode
+                        state.pendingImageCell = { id: c.id, key: col.key, td: td };
+                        setPasteHighlight(td);
+                        setStatus('已選定 ' + col.key + ',按 Ctrl+V 貼上 / 拖檔到此 / 按 ESC 取消', 'dirty');
+                    });
+
+                    // ---- Drag-and-drop image files ----
+                    td.addEventListener('dragover', (ev) => {
+                        ev.preventDefault();
+                        td.classList.add('drop-target');
+                    });
+                    td.addEventListener('dragleave', () => {
+                        td.classList.remove('drop-target');
+                    });
+                    td.addEventListener('drop', (ev) => {
+                        ev.preventDefault();
+                        td.classList.remove('drop-target');
+                        const files = Array.from((ev.dataTransfer && ev.dataTransfer.files) || [])
+                            .filter(f => f.type && f.type.indexOf('image/') === 0);
+                        if (!files.length) return;
+                        // Activate this cell as the pending target
+                        state.pendingImageCell = { id: c.id, key: col.key, td: td };
+                        Promise.all(files.map(f => new Promise(res => {
+                            const r = new FileReader();
+                            r.onload = () => res(r.result);
+                            r.onerror = () => res(null);
+                            r.readAsDataURL(f);
+                        }))).then(urls => {
+                            appendImageDataUrls(urls.filter(Boolean), { keepPasteMode: false });
+                            state.pendingImageCell = null;
+                            clearPasteHighlight();
+                        });
                     });
                 } else if (col.kind === 'link') {
                     td.className = 'link-cell';
@@ -1131,23 +1251,6 @@
             return true;
         }
 
-        // Allow multi-select in the file picker
-        hiddenFile.setAttribute('multiple', 'multiple');
-        hiddenFile.addEventListener('change', () => {
-            const files = Array.from(hiddenFile.files || []);
-            if (!files.length || !state.pendingImageCell) return;
-            Promise.all(files.map(f => new Promise(resolve => {
-                const r = new FileReader();
-                r.onload = () => resolve(r.result);
-                r.onerror = () => resolve(null);
-                r.readAsDataURL(f);
-            }))).then(urls => {
-                appendImageDataUrls(urls.filter(Boolean), { keepPasteMode: false });
-                state.pendingImageCell = null;
-                clearPasteHighlight();
-            });
-        });
-
         function setPasteHighlight(td) {
             clearPasteHighlight();
             td.classList.add('pasting');
@@ -1221,6 +1324,25 @@
             document.documentElement.setAttribute('data-theme', next);
             try { localStorage.setItem('defect-lesson-theme', next); } catch (e) {}
         });
+
+        // ---- Usage hint show/hide (remembered in localStorage) ----
+        const usageHintEl = $('#usageHint');
+        const usageHelpBtn = $('#btnHelp');
+        function setUsageHintVisible(show) {
+            if (show) {
+                usageHintEl.classList.remove('collapsed');
+                usageHelpBtn.style.display = 'none';
+            } else {
+                usageHintEl.classList.add('collapsed');
+                usageHelpBtn.style.display = '';
+            }
+            try { localStorage.setItem('defect-lesson-hint', show ? '1' : '0'); } catch (e) {}
+        }
+        $('#usageClose').addEventListener('click', () => setUsageHintVisible(false));
+        usageHelpBtn.addEventListener('click', () => setUsageHintVisible(true));
+        try {
+            if (localStorage.getItem('defect-lesson-hint') === '0') setUsageHintVisible(false);
+        } catch (e) {}
 
         // ---- Search ----
         searchInput.addEventListener('input', renderAll);
