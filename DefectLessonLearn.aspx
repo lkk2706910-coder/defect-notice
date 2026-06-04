@@ -750,6 +750,47 @@
             display: block;
             border: 1px solid rgba(255,255,255,0.15);
         }
+        .ai-refs {
+            align-self: flex-start;
+            margin-top: -2px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            font-size: 12px;
+            color: var(--muted);
+            max-width: 90%;
+        }
+        .ai-ref-label { margin-right: 2px; }
+        .ai-ref-chip {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--chip);
+            border: 1px solid var(--chip-active-border);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 12px;
+            transition: background .15s;
+        }
+        .ai-ref-chip:hover { background: var(--chip-active-bg); }
+        .ai-refs-apply {
+            margin-left: 4px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            background: var(--accent);
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .ai-refs-apply:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+        /* Row flash when a [#N] chip jumps to a case */
+        @keyframes ai-row-flash {
+            0%   { background: rgba(99,179,237,0.40); }
+            100% { background: transparent; }
+        }
+        tr.ai-flash > td { animation: ai-row-flash 1.6s ease-out; }
     </style>
 </head>
 <body>
@@ -870,7 +911,9 @@
             //  - loadedIds:  ids that came from the last server load (= they're on disk)
             dirtyIds: new Set(),
             deletedIds: new Set(),
-            loadedIds: new Set()
+            loadedIds: new Set(),
+            // Set by the AI panel via applyAiFilter(); null = no AI filter.
+            aiFilterIds: null
         };
 
         const $ = (sel) => document.querySelector(sel);
@@ -1154,6 +1197,10 @@
         }
         function getVisibleCases() {
             let rows = state.cases.slice();
+            // AI-driven filter (set by clicking "在表格只顯示這些" in a chat reply)
+            if (state.aiFilterIds && state.aiFilterIds.size > 0) {
+                rows = rows.filter(c => state.aiFilterIds.has(c.id));
+            }
             rows = filterRows(rows);
             const q = (searchInput.value || '').trim().toLowerCase();
             if (q) rows = rows.filter(c => matchSearch(c, q));
@@ -1174,11 +1221,55 @@
         function updateStatusCount() {
             const total = state.cases.length;
             const shown = getVisibleCases().length;
+            if (state.aiFilterIds && state.aiFilterIds.size > 0) {
+                // Hint that the count is constrained by an AI filter, with a quick clear.
+                statusPill.className = 'status-pill dirty';
+                statusPill.innerHTML = 'AI 篩選中: ' + shown + ' 筆 ' +
+                    '<a href="#" id="aiFilterClearLink" style="margin-left:6px;text-decoration:underline;">清除</a>';
+                const link = document.getElementById('aiFilterClearLink');
+                if (link) link.addEventListener('click', (e) => { e.preventDefault(); clearAiFilter(); });
+                return;
+            }
             if (shown === total) {
                 setStatus('共 ' + total + ' 筆');
             } else {
                 setStatus('顯示 ' + shown + ' / ' + total + ' 筆', 'dirty');
             }
+        }
+
+        // ---- AI-driven filter (applied from chat panel) ----
+        function applyAiFilter(caseNumbers) {
+            const ids = new Set();
+            caseNumbers.forEach(n => {
+                const c = state.cases[n - 1];
+                if (c) ids.add(c.id);
+            });
+            if (ids.size === 0) return;
+            state.aiFilterIds = ids;
+            renderAll();
+            // Scroll the first matched row into view for immediate feedback.
+            const firstId = ids.values().next().value;
+            const firstTr = document.querySelector('tr[data-id="' + firstId + '"]');
+            if (firstTr) firstTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        function clearAiFilter() {
+            state.aiFilterIds = null;
+            renderAll();
+        }
+        function scrollToCaseByNumber(n) {
+            const c = state.cases[n - 1];
+            if (!c) return;
+            // If current visibility hides this row, drop the AI filter so it can show.
+            // (Regular per-column filters / search are left alone — user can clear themselves.)
+            if (state.aiFilterIds && !state.aiFilterIds.has(c.id)) {
+                state.aiFilterIds.add(c.id);
+                renderAll();
+            }
+            const tr = document.querySelector('tr[data-id="' + c.id + '"]');
+            if (!tr) return;
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            tr.classList.add('ai-flash');
+            setTimeout(() => tr.classList.remove('ai-flash'), 1600);
         }
 
         function matchSearch(c, q) {
@@ -1737,8 +1828,52 @@
                 div.className = 'ai-msg ' + (cls || role);
                 div.textContent = text;
                 msgs.appendChild(div);
+                // For assistant replies: detect [#N] references and offer one-click filter.
+                if (role === 'assistant' && !cls) {
+                    appendCaseRefsToolbar(text);
+                }
                 msgs.scrollTop = msgs.scrollHeight;
                 return div;
+            }
+            // Extract unique [#N] mentions (only valid indices 1..state.cases.length).
+            function extractCaseRefs(text) {
+                const seen = new Set();
+                const out = [];
+                const re = /\[#(\d+)\]/g;
+                let m;
+                while ((m = re.exec(text)) !== null) {
+                    const n = parseInt(m[1], 10);
+                    if (n >= 1 && n <= state.cases.length && !seen.has(n)) {
+                        seen.add(n);
+                        out.push(n);
+                    }
+                }
+                return out;
+            }
+            function appendCaseRefsToolbar(text) {
+                const refs = extractCaseRefs(text);
+                if (refs.length === 0) return;
+                const bar = document.createElement('div');
+                bar.className = 'ai-refs';
+                const label = document.createElement('span');
+                label.className = 'ai-ref-label';
+                label.textContent = '提到 ' + refs.length + ' 筆:';
+                bar.appendChild(label);
+                refs.forEach(n => {
+                    const chip = document.createElement('span');
+                    chip.className = 'ai-ref-chip';
+                    chip.textContent = '#' + n;
+                    chip.title = '點擊跳到此 case';
+                    chip.addEventListener('click', () => scrollToCaseByNumber(n));
+                    bar.appendChild(chip);
+                });
+                const applyBtn = document.createElement('button');
+                applyBtn.type = 'button';
+                applyBtn.className = 'ai-refs-apply';
+                applyBtn.textContent = '在表格只顯示這些';
+                applyBtn.addEventListener('click', () => applyAiFilter(refs));
+                bar.appendChild(applyBtn);
+                msgs.appendChild(bar);
             }
             // User message bubble that can show text + an attached image.
             function appendUserMessage(text, imgUrl) {
@@ -1874,7 +2009,7 @@
                     if (ctx) {
                         messages.push({
                             role: 'system',
-                            content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。每筆 case 開頭的 [#N] 是頁面上的列號,可在引用時使用。\n\n若使用者上傳圖片,請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位(defectType / map / position / waferTrend / rootCause / parts 等)推測哪幾筆最可能相關,並依相關度由高到低列出,引用 [#N] 並說明判斷依據。\n\n' + ctx
+                            content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。\n\n【重要格式規定】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。\n\n若使用者上傳圖片,請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位(defectType / map / position / waferTrend / rootCause / parts 等)推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
                         });
                     }
                     messages.push(...history);
