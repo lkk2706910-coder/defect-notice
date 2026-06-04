@@ -296,8 +296,8 @@
             background: transparent;
         }
         td.img-cell {
-            min-width: 220px;
-            width: 220px;
+            min-width: 190px;
+            width: 190px;
             text-align: center;
             position: relative;
             cursor: pointer;
@@ -318,18 +318,18 @@
             gap: 4px;
             justify-content: center;
             margin: 0 auto 4px auto;
-            max-width: 210px;
+            max-width: 180px;
         }
         td.img-cell .img-thumb {
             position: relative;
             display: inline-block;
             line-height: 0;
-            flex: 0 0 140px;
-            width: 140px;
-            height: 140px;
+            flex: 0 0 80px;     /* don't shrink — every thumb stays this size */
+            width: 80px;
+            height: 80px;
         }
         td.img-cell .img-thumb img {
-            width: 140px; height: 140px;
+            width: 80px; height: 80px;
             object-fit: cover;
             border-radius: 4px;
             border: 1px solid var(--border);
@@ -358,7 +358,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 140px;
+            height: 80px;
             font-size: 11px;
             color: var(--muted);
             border: 1px dashed var(--border);
@@ -617,7 +617,7 @@
         body.view-mode .cell-text { cursor: default; }
         body.view-mode .cell-text:focus { outline: none; box-shadow: none; }
 
-        .col-img { min-width: 220px; }
+        .col-img { min-width: 190px; }
         .col-date { min-width: 100px; }
         .col-cat { min-width: 140px; }
         .col-link { min-width: 110px; }
