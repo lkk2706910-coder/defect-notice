@@ -770,7 +770,7 @@
     <button id="aiBubble" type="button" title="AI 助理">AI</button>
     <div id="aiPanel" hidden>
         <div class="ai-head">
-            <span class="ai-title">AI 助理 <small>設備工程小助手</small></span>
+            <span class="ai-title">AI 助理 <small id="aiCaseCount">已載入 0 筆 case</small></span>
             <button type="button" id="aiClose" title="關閉">×</button>
         </div>
         <div id="aiMessages" class="ai-msgs"></div>
@@ -1624,10 +1624,40 @@
             function open() {
                 panel.hidden = false;
                 bubble.classList.add('open');
+                updateCaseCount();
                 if (history.length === 0) {
-                    appendMessage('assistant', '你好,我是設備工程小助手。可以問我關於 defect lesson learn 的問題。');
+                    const n = state.cases.length;
+                    appendMessage('assistant',
+                        n > 0
+                            ? '你好,我已掌握目前頁面上的 ' + n + ' 筆 case 資料,可以根據這些內容回答問題。'
+                            : '你好,目前頁面上還沒有 case 資料。請先新增幾筆後再問我。');
                 }
                 setTimeout(() => input.focus(), 0);
+            }
+            function updateCaseCount() {
+                const el = document.getElementById('aiCaseCount');
+                if (el) el.textContent = '已載入 ' + state.cases.length + ' 筆 case';
+            }
+            // Build a compact, text-only snapshot of the cases to feed the LLM.
+            // Images are skipped (base64 would explode the prompt); multi-line values
+            // are flattened so each case is a tidy block.
+            function buildCasesContext() {
+                if (!state.cases.length) return '';
+                return state.cases.map((c, i) => {
+                    const lines = ['[#' + (i + 1) + '] id=' + c.id];
+                    COLUMNS.forEach(col => {
+                        if (col.kind === 'img') return;
+                        const v = c[col.key];
+                        if (v == null || v === '') return;
+                        if (Array.isArray(v) && v.length === 0) return;
+                        const flat = Array.isArray(v)
+                            ? v.join(' | ')
+                            : String(v).replace(/\r?\n+/g, '; ').trim();
+                        if (!flat) return;
+                        lines.push('  ' + col.key + ': ' + flat);
+                    });
+                    return lines.join('\n');
+                }).join('\n\n');
             }
             function close() {
                 panel.hidden = true;
@@ -1664,10 +1694,22 @@
                 sendBtn.disabled = true;
                 const typing = appendTyping();
                 try {
+                    // Inject the current cases as a system message so the LLM
+                    // answers from the user's actual data, not from training.
+                    // Rebuilt every turn so freshly-edited cases are visible.
+                    const ctx = buildCasesContext();
+                    const messages = [];
+                    if (ctx) {
+                        messages.push({
+                            role: 'system',
+                            content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。每筆 case 開頭的 [#N] 是頁面上的列號,可在引用時使用。\n\n' + ctx
+                        });
+                    }
+                    messages.push(...history);
                     const res = await fetch('DefectLessonLearn.aspx?op=chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                        body: JSON.stringify({ messages: history })
+                        body: JSON.stringify({ messages: messages })
                     });
                     const data = await res.json();
                     typing.remove();
