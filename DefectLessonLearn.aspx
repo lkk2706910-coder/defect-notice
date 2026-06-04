@@ -696,7 +696,14 @@
         const state = {
             cases: [],
             dirty: false,
-            pendingImageCell: null
+            pendingImageCell: null,
+            // Method-B concurrency tracking:
+            //  - dirtyIds:   ids of cases modified or just created (need server upsert)
+            //  - deletedIds: ids removed from the table that EXIST on the server (need server delete)
+            //  - loadedIds:  ids that came from the last server load (= they're on disk)
+            dirtyIds: new Set(),
+            deletedIds: new Set(),
+            loadedIds: new Set()
         };
 
         const $ = (sel) => document.querySelector(sel);
@@ -708,9 +715,11 @@
             statusPill.className = 'status-pill ' + (cls || '');
             statusPill.textContent = text;
         }
-        function markDirty() {
+        function markDirty(id) {
             state.dirty = true;
-            setStatus('有未儲存變更', 'dirty');
+            if (id) state.dirtyIds.add(id);
+            const n = state.dirtyIds.size + state.deletedIds.size;
+            setStatus(n > 0 ? ('有 ' + n + ' 筆未儲存') : '有未儲存變更', 'dirty');
         }
         function markSaved() {
             state.dirty = false;
@@ -799,7 +808,7 @@
                             const arr = parseImages(c[col.key]);
                             arr.splice(idx, 1);
                             c[col.key] = arr;
-                            markDirty();
+                            markDirty(c.id);
                             const newTr = renderRow(c);
                             tr.replaceWith(newTr);
                             return;
@@ -815,7 +824,7 @@
                             ev.stopPropagation();
                             if (!confirm('清掉這格全部圖片?')) return;
                             c[col.key] = [];
-                            markDirty();
+                            markDirty(c.id);
                             const newTr = renderRow(c);
                             tr.replaceWith(newTr);
                             return;
@@ -897,7 +906,15 @@
                 if (!confirm('確定刪除這筆 case?')) return;
                 state.cases = state.cases.filter(x => x.id !== c.id);
                 tr.remove();
-                markDirty();
+                // If this case exists on the server, queue a server-side delete.
+                // If it was a never-saved local addition, just drop it locally.
+                state.dirtyIds.delete(c.id);
+                if (state.loadedIds.has(c.id)) {
+                    state.deletedIds.add(c.id);
+                }
+                state.dirty = true;
+                const n = state.dirtyIds.size + state.deletedIds.size;
+                setStatus(n > 0 ? ('有 ' + n + ' 筆未儲存') : '有未儲存變更', 'dirty');
             });
             tr.appendChild(tdAct);
             return tr;
@@ -909,7 +926,7 @@
                 const newVal = ce.textContent;
                 if (c[key] !== newVal) {
                     c[key] = newVal;
-                    markDirty();
+                    markDirty(c.id);
                     if (key === 'link') {
                         // rebuild row to show link
                         const tr = ce.closest('tr');
@@ -1192,7 +1209,7 @@
                 const newVal = arr.join('\n');
                 if ((c[key] || '') !== newVal) {
                     c[key] = newVal;
-                    markDirty();
+                    markDirty(c.id);
                     const tr = anchor.closest('tr');
                     if (tr) {
                         const newTr = renderRow(c);
@@ -1254,7 +1271,7 @@
                     }
                 }
             }
-            markDirty();
+            markDirty(c.id);
             return true;
         }
 
@@ -1363,7 +1380,7 @@
             state.filters = {};
             document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
             renderAll();
-            markDirty();
+            markDirty(c.id);
         });
 
         // ---- Clear all sort/filter ----
@@ -1378,26 +1395,81 @@
             renderAll();
         });
 
-        // ---- Save ----
+        // ---- Save (per-case upsert + per-id delete) ----
+        // Each modified/new case is sent individually so two users editing
+        // different cases never overwrite each other's work.
         $('#btnSave').addEventListener('click', save);
         async function save() {
-            setStatus('儲存中...');
+            const dirtyIds = [...state.dirtyIds];
+            const deletedIds = [...state.deletedIds];
+            const total = dirtyIds.length + deletedIds.length;
+            if (total === 0) {
+                setStatus('沒有變更');
+                return;
+            }
+            let done = 0;
             try {
-                const res = await fetch('DefectLessonLearn.aspx?op=save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                    body: JSON.stringify({ cases: state.cases })
-                });
-                const data = await res.json();
-                if (data.ok) markSaved();
-                else setStatus('儲存失敗: ' + (data.error || 'unknown'), 'error');
+                // Upserts (modified / newly added cases)
+                for (const id of dirtyIds) {
+                    setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
+                    const c = state.cases.find(x => x.id === id);
+                    if (!c) {
+                        // Was added then deleted within the same session — nothing to send
+                        state.dirtyIds.delete(id);
+                        continue;
+                    }
+                    const res = await fetch('DefectLessonLearn.aspx?op=upsert', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                        body: JSON.stringify(c)
+                    });
+                    const data = await res.json();
+                    if (!data || !data.ok) throw new Error('upsert ' + id + ': ' + (data && data.error || res.status));
+                    state.dirtyIds.delete(id);
+                }
+                // Deletes
+                for (const id of deletedIds) {
+                    setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
+                    const res = await fetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), { method: 'POST' });
+                    const data = await res.json();
+                    if (!data || !data.ok) throw new Error('delete ' + id + ': ' + (data && data.error || res.status));
+                    state.deletedIds.delete(id);
+                }
+                // Re-fetch so any changes made by OTHER users during our session are picked up
+                await reloadFromServer({ silent: true });
+                markSaved();
             } catch (e) {
                 setStatus('儲存失敗: ' + e.message, 'error');
             }
         }
 
+        async function reloadFromServer(opts) {
+            opts = opts || {};
+            const res = await fetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
+            const data = await res.json();
+            const fromServer = Array.isArray(data.cases) ? data.cases : [];
+            fromServer.forEach(c => { if (!c.id) c.id = uid(); });
+            // Preserve dirty / new local edits that haven't been saved yet
+            const dirtyMap = new Map();
+            state.cases.forEach(c => { if (state.dirtyIds.has(c.id)) dirtyMap.set(c.id, c); });
+            // Build merged list: server cases first; locally-dirty rows override; locally-new rows appended
+            const seen = new Set();
+            const merged = fromServer.map(sc => {
+                seen.add(sc.id);
+                return dirtyMap.has(sc.id) ? dirtyMap.get(sc.id) : sc;
+            });
+            // Local-new rows (in dirtyIds but not on server) keep their place at the top
+            const localNew = [];
+            state.cases.forEach(c => {
+                if (state.dirtyIds.has(c.id) && !seen.has(c.id)) localNew.push(c);
+            });
+            state.cases = [...localNew, ...merged];
+            state.loadedIds = new Set(fromServer.map(c => c.id));
+            renderAll();
+        }
+
         window.addEventListener('beforeunload', (e) => {
-            if (state.dirty) {
+            if (state.dirtyIds.size > 0 || state.deletedIds.size > 0) {
                 e.preventDefault();
                 e.returnValue = '有未儲存的變更,確定要離開?';
                 return e.returnValue;
@@ -1413,6 +1485,10 @@
                 state.cases = Array.isArray(data.cases) ? data.cases : [];
                 // ensure each has an id
                 state.cases.forEach(c => { if (!c.id) c.id = uid(); });
+                // Remember which ids exist on disk — used by per-case save & delete logic
+                state.loadedIds = new Set(state.cases.map(c => c.id));
+                state.dirtyIds.clear();
+                state.deletedIds.clear();
                 decorateHeaders();
                 renderAll();
             } catch (e) {
