@@ -931,6 +931,18 @@
             100% { background: transparent; }
         }
         tr.ai-flash > td { animation: ai-row-flash 1.6s ease-out; }
+        /* Auto-detected near-duplicate notice under a user image upload */
+        .ai-hash-hint {
+            align-self: center;
+            font-size: 11px;
+            color: var(--accent);
+            background: rgba(99,179,237,0.10);
+            border: 1px dashed var(--chip-active-border);
+            border-radius: 8px;
+            padding: 4px 10px;
+            max-width: 90%;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -2236,6 +2248,17 @@
                 msgs.scrollTop = msgs.scrollHeight;
                 return div;
             }
+            // Small inline notice shown after the user bubble when dHash matches
+            // an existing case image. Purely UI — not persisted in history.
+            function appendHashHintBubble(matches) {
+                const refs = matches.map(m => '[#' + m.n + '] (距離 ' + m.dist + ')').join(', ');
+                const div = document.createElement('div');
+                div.className = 'ai-hash-hint';
+                div.textContent = '影像指紋偵測:此圖與 ' + refs + ' 視覺相似';
+                msgs.appendChild(div);
+                msgs.scrollTop = msgs.scrollHeight;
+                return div;
+            }
             function appendTyping() {
                 const div = document.createElement('div');
                 div.className = 'ai-msg typing';
@@ -2267,6 +2290,84 @@
                     img.onerror = () => resolve(dataUrl);
                     img.src = dataUrl;
                 });
+            }
+            // ---- Perceptual image hashing (dHash) ----
+            // Produces a 64-bit hex fingerprint robust to resize / compression /
+            // small color shifts. Lets us spot when the uploaded image is the
+            // SAME picture as one of the case images, even though the bytes
+            // differ (after JPEG re-encode, browser resize, etc).
+            const imageHashCache = new Map(); // dataUrl -> hex (16 chars)
+            function dhashOf(dataUrl) {
+                return new Promise((resolve) => {
+                    if (!dataUrl) return resolve(null);
+                    if (imageHashCache.has(dataUrl)) return resolve(imageHashCache.get(dataUrl));
+                    const img = new Image();
+                    img.onload = () => {
+                        const W = 9, H = 8;
+                        const c = document.createElement('canvas');
+                        c.width = W; c.height = H;
+                        const ctx = c.getContext('2d');
+                        ctx.drawImage(img, 0, 0, W, H);
+                        const data = ctx.getImageData(0, 0, W, H).data;
+                        // Compare each pixel to its right neighbour -> 8x8 bits.
+                        let hex = '';
+                        let nibble = 0, count = 0;
+                        for (let r = 0; r < H; r++) {
+                            for (let col = 0; col < W - 1; col++) {
+                                const i1 = (r * W + col) * 4;
+                                const i2 = (r * W + col + 1) * 4;
+                                const g1 = 0.299 * data[i1] + 0.587 * data[i1 + 1] + 0.114 * data[i1 + 2];
+                                const g2 = 0.299 * data[i2] + 0.587 * data[i2 + 1] + 0.114 * data[i2 + 2];
+                                nibble = (nibble << 1) | (g2 > g1 ? 1 : 0);
+                                count++;
+                                if (count === 4) { hex += nibble.toString(16); nibble = 0; count = 0; }
+                            }
+                        }
+                        imageHashCache.set(dataUrl, hex);
+                        resolve(hex);
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = dataUrl;
+                });
+            }
+            function hammingHex(h1, h2) {
+                if (!h1 || !h2 || h1.length !== h2.length) return 999;
+                let d = 0;
+                for (let i = 0; i < h1.length; i++) {
+                    let x = parseInt(h1[i], 16) ^ parseInt(h2[i], 16);
+                    // popcount over 4 bits
+                    while (x) { d += x & 1; x >>= 1; }
+                }
+                return d;
+            }
+            // For each case, compute the smallest distance between the uploaded
+            // hash and any of its stored images (waferMap + image columns).
+            // Returns sorted matches with distance <= threshold.
+            async function findImageMatches(uploadedUrl, threshold) {
+                const uploaded = await dhashOf(uploadedUrl);
+                if (!uploaded) return [];
+                const tasks = [];
+                state.cases.forEach((c, i) => {
+                    const add = (val, field) => {
+                        if (Array.isArray(val)) val.forEach(u => { if (u) tasks.push({ idx: i, c: c, field: field, url: u }); });
+                        else if (typeof val === 'string' && val) tasks.push({ idx: i, c: c, field: field, url: val });
+                    };
+                    add(c.waferMap, 'waferMap');
+                    add(c.image, 'image');
+                });
+                const hashes = await Promise.all(tasks.map(t => dhashOf(t.url)));
+                const best = new Map(); // c.id -> {n, dist, field}
+                tasks.forEach((t, k) => {
+                    const h = hashes[k];
+                    if (!h) return;
+                    const d = hammingHex(uploaded, h);
+                    const cur = best.get(t.c.id);
+                    if (!cur || d < cur.dist) best.set(t.c.id, { n: t.idx + 1, dist: d, field: t.field });
+                });
+                const matches = [];
+                best.forEach(v => { if (v.dist <= threshold) matches.push(v); });
+                matches.sort((a, b) => a.dist - b.dist);
+                return matches;
             }
             function approxKB(dataUrl) {
                 // base64 -> bytes ratio ≈ 3/4 of base64 length, minus the prefix.
@@ -2348,6 +2449,19 @@
                 renderSessionList();
                 busy = true;
                 sendBtn.disabled = true;
+
+                // Image fingerprint check: before talking to the LLM, fingerprint
+                // the uploaded image and compare against every case's stored
+                // images. Hits become a hard hint in the prompt — solves the
+                // common "I pasted case#5's map but AI didn't pick #5" problem
+                // because the LLM never sees the case images directly.
+                let hashMatches = [];
+                if (img) {
+                    try { hashMatches = await findImageMatches(img, 10); }
+                    catch (e) { hashMatches = []; }
+                    if (hashMatches.length > 0) appendHashHintBubble(hashMatches);
+                }
+
                 const typing = appendTyping();
                 try {
                     // Inject the current cases as a system message so the LLM
@@ -2359,6 +2473,19 @@
                         messages.push({
                             role: 'system',
                             content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。\n\n【重要格式規定】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。\n\n若使用者上傳圖片,請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位(defectType / map / position / waferTrend / rootCause / parts 等)推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
+                        });
+                    }
+                    // dHash-detected near-duplicates: tell the LLM in a SEPARATE
+                    // system message so it overrides anything else. Distance is
+                    // 0-64; <=10 we treat as the same picture.
+                    if (hashMatches.length > 0) {
+                        const lines = hashMatches.map(m =>
+                            '  - [#' + m.n + '] 的 ' + m.field + ' 圖,Hamming 距離 ' + m.dist + ' (0=完全相同)');
+                        messages.push({
+                            role: 'system',
+                            content: '【影像指紋偵測】使用者上傳的圖片,經 dHash 比對,與下列 case 在視覺上幾乎相同:\n' +
+                                lines.join('\n') +
+                                '\n\n請務必把這些 case 列為「最相關」並排在回覆最前面,並以 [#N] 格式引用。'
                         });
                     }
                     messages.push(...s.history);
