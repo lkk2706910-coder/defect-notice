@@ -512,12 +512,10 @@
             display: flex; align-items: center; justify-content: center;
             cursor: zoom-out;
         }
-        .img-overlay img {
-            width: 95vw;
-            height: 95vh;
-            object-fit: contain;
-            border-radius: 6px;
-        }
+        /* Concrete width/height set by openOverlay() once the natural size
+           is known so we can cap zoom at 2x while still respecting the
+           viewport. */
+        .img-overlay img { border-radius: 6px; }
 
         /* Theme toggle */
         .usage-hint {
@@ -1794,7 +1792,24 @@
             overlay = document.createElement('div');
             overlay.className = 'img-overlay';
             const img = document.createElement('img');
+            // Cap zoom at 2x native size, but also fit inside 95% of the
+            // viewport. The smaller of those two limits wins, preserving
+            // aspect ratio so the image is never stretched.
+            const sizeIt = () => {
+                const nw = img.naturalWidth, nh = img.naturalHeight;
+                if (!nw || !nh) return;
+                const ZOOM = 2;
+                const scale = Math.min(
+                    ZOOM,
+                    (window.innerWidth  * 0.95) / nw,
+                    (window.innerHeight * 0.95) / nh
+                );
+                img.style.width  = (nw * scale) + 'px';
+                img.style.height = (nh * scale) + 'px';
+            };
+            img.onload = sizeIt;
             img.src = src;
+            if (img.complete) sizeIt(); // cached images may not fire onload
             overlay.appendChild(img);
             overlay.addEventListener('click', closeOverlay);
             document.body.appendChild(overlay);
