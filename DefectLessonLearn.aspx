@@ -2242,6 +2242,9 @@
                     const im = document.createElement('img');
                     im.className = 'ai-msg-img';
                     im.src = imgUrl;
+                    im.style.cursor = 'zoom-in';
+                    im.title = '點擊放大';
+                    im.addEventListener('click', () => openOverlay(imgUrl));
                     div.appendChild(im);
                 }
                 msgs.appendChild(div);
@@ -2405,6 +2408,12 @@
                 if (f) setAttachedFromFile(f);
             });
             previewRemove.addEventListener('click', clearAttachment);
+            // Click the staged thumbnail to zoom it before sending.
+            previewImg.style.cursor = 'zoom-in';
+            previewImg.title = '點擊放大';
+            previewImg.addEventListener('click', () => {
+                if (previewImg.src) openOverlay(previewImg.src);
+            });
             // Paste an image directly into the textarea
             input.addEventListener('paste', (ev) => {
                 const items = (ev.clipboardData && ev.clipboardData.items) || [];
