@@ -329,6 +329,11 @@ public partial class DefectLessonLearn : System.Web.UI.Page
     // a 401 response if invalid. Returns false when the caller should bail.
     private bool RequireAuth()
     {
+        // Don't let IIS rewrite our 401 into a WWW-Authenticate challenge —
+        // otherwise the browser pops its native "sign in to umcesidb02" prompt
+        // and asks for Windows / server credentials, which we don't use.
+        Response.TrySkipIisCustomErrors = true;
+        Response.Headers.Remove("WWW-Authenticate");
         string token = Request.Headers["X-Auth-Token"];
         if (string.IsNullOrEmpty(token))
         {
@@ -361,6 +366,8 @@ public partial class DefectLessonLearn : System.Web.UI.Page
 
     private void HandleLogin()
     {
+        Response.TrySkipIisCustomErrors = true;
+        Response.Headers.Remove("WWW-Authenticate");
         string body = ReadBody();
         var ser = NewSerializer();
         Dictionary<string, object> req;
