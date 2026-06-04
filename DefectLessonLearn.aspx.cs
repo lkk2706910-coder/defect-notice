@@ -213,7 +213,9 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         string apiKey = ConfigurationManager.AppSettings["AiApiKey"];
         string userId = ConfigurationManager.AppSettings["AiUserId"];
         string systemPrompt = ConfigurationManager.AppSettings["AiSystemPrompt"];
-        if (string.IsNullOrEmpty(systemPrompt)) systemPrompt = "你是設備工程小助手";
+        // Fallback prompt kept ASCII-only so this source file is encoding-safe.
+        // The real Chinese prompt lives in web.config (<appSettings AiSystemPrompt>).
+        if (string.IsNullOrEmpty(systemPrompt)) systemPrompt = "You are a helpful assistant.";
 
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(apiKey))
         {
