@@ -633,19 +633,104 @@
             position: fixed;
             right: 22px;
             bottom: 90px;
-            width: 380px;
-            height: 540px;
+            width: 560px;
+            height: 580px;
+            max-width: calc(100vw - 44px);
             max-height: calc(100vh - 120px);
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 14px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.2);
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             overflow: hidden;
             z-index: 9999;
         }
         #aiPanel[hidden] { display: none; }
+        .ai-sidebar {
+            width: 160px;
+            flex: none;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel-elevated);
+            border-right: 1px solid var(--border);
+        }
+        .ai-new-btn {
+            margin: 8px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .ai-new-btn:hover { background: var(--accent-strong); }
+        .ai-sess-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 6px 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .ai-sess {
+            position: relative;
+            padding: 6px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .ai-sess:hover { background: var(--row-hover); }
+        .ai-sess.active { background: var(--tint-high); border-color: var(--chip-active-border); }
+        .ai-sess-title {
+            font-size: 12px;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-right: 16px;
+        }
+        .ai-sess-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+        .ai-sess-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+        .ai-sess-tags .tag {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            background: var(--chip);
+            color: var(--muted);
+        }
+        .ai-sess-del {
+            position: absolute;
+            top: 4px; right: 4px;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            padding: 0 4px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity .12s;
+        }
+        .ai-sess:hover .ai-sess-del,
+        .ai-sess.active .ai-sess-del { opacity: 1; }
+        .ai-sess-del:hover { background: var(--warn-bg); color: var(--danger); }
+        .ai-sess-footer {
+            padding: 6px 10px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 11px;
+        }
+        .ai-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
         .ai-head {
             display: flex;
             align-items: center;
@@ -656,6 +741,61 @@
         }
         .ai-title { font-weight: 600; color: var(--text); font-size: 14px; }
         .ai-title small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+        .ai-title-input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text);
+            font-weight: 600;
+            font-size: 14px;
+            outline: none;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+        .ai-title-input:hover { background: var(--tint-med); }
+        .ai-title-input:focus { background: var(--tint-med); border-color: var(--accent); }
+        .ai-tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel-elevated);
+            min-height: 30px;
+        }
+        .ai-tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--chip);
+            color: var(--text);
+            border: 1px solid var(--chip-active-border);
+            border-radius: 999px;
+            padding: 2px 4px 2px 8px;
+            font-size: 11px;
+        }
+        .ai-tag-chip .x {
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+            border-radius: 4px;
+        }
+        .ai-tag-chip .x:hover { background: var(--warn-bg); color: var(--danger); }
+        .ai-tag-add {
+            background: transparent;
+            border: 1px dashed var(--border);
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .ai-tag-add:hover { color: var(--text); border-color: var(--accent); }
         #aiClose {
             background: transparent; border: none; color: var(--muted);
             font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px;
@@ -857,25 +997,33 @@
     <!-- AI assistant floating bubble + chat panel -->
     <button id="aiBubble" type="button" title="AI 助理">AI</button>
     <div id="aiPanel" hidden>
-        <div class="ai-head">
-            <span class="ai-title">AI 助理 <small id="aiCaseCount">已載入 0 筆 case</small></span>
-            <button type="button" id="aiClose" title="關閉">×</button>
+        <div class="ai-sidebar">
+            <button type="button" id="aiNewChat" class="ai-new-btn">+ 新聊天</button>
+            <div id="aiSessionList" class="ai-sess-list"></div>
+            <div class="ai-sess-footer" id="aiCaseCount">已載入 0 筆 case</div>
         </div>
-        <div id="aiMessages" class="ai-msgs"></div>
-        <div id="aiPreview" class="ai-preview" hidden>
-            <img id="aiPreviewImg" alt="附加圖片" />
-            <span class="ai-prev-meta" id="aiPreviewMeta"></span>
-            <button type="button" class="ai-prev-remove" id="aiPreviewRemove" title="移除附圖">移除</button>
-        </div>
-        <div class="ai-input-wrap">
-            <button type="button" id="aiAttach" class="ai-icon-btn" title="附加圖片(可貼上)">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                </svg>
-            </button>
-            <input type="file" id="aiFile" accept="image/*" hidden />
-            <textarea id="aiInput" placeholder="輸入問題,可附圖搜尋相關 case。Enter 送出,Shift+Enter 換行" rows="2"></textarea>
-            <button type="button" id="aiSend" class="btn btn-primary">送出</button>
+        <div class="ai-main">
+            <div class="ai-head">
+                <input type="text" id="aiTitle" class="ai-title-input" placeholder="對話標題" />
+                <button type="button" id="aiClose" title="關閉">×</button>
+            </div>
+            <div class="ai-tags-row" id="aiTagsRow"></div>
+            <div id="aiMessages" class="ai-msgs"></div>
+            <div id="aiPreview" class="ai-preview" hidden>
+                <img id="aiPreviewImg" alt="附加圖片" />
+                <span class="ai-prev-meta" id="aiPreviewMeta"></span>
+                <button type="button" class="ai-prev-remove" id="aiPreviewRemove" title="移除附圖">移除</button>
+            </div>
+            <div class="ai-input-wrap">
+                <button type="button" id="aiAttach" class="ai-icon-btn" title="附加圖片(可貼上)">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                </button>
+                <input type="file" id="aiFile" accept="image/*" hidden />
+                <textarea id="aiInput" placeholder="輸入問題,可附圖搜尋相關 case。Enter 送出,Shift+Enter 換行" rows="2"></textarea>
+                <button type="button" id="aiSend" class="btn btn-primary">送出</button>
+            </div>
         </div>
     </div>
 
@@ -1770,27 +1918,221 @@
             const previewImg = document.getElementById('aiPreviewImg');
             const previewMeta = document.getElementById('aiPreviewMeta');
             const previewRemove = document.getElementById('aiPreviewRemove');
+            const newChatBtn = document.getElementById('aiNewChat');
+            const sessionListEl = document.getElementById('aiSessionList');
+            const titleInput = document.getElementById('aiTitle');
+            const tagsRow = document.getElementById('aiTagsRow');
 
-            // Only user/assistant turns are kept here; the system prompt is
-            // injected by the server from web.config on every request.
-            const history = [];
+            // ---- Sessions (persisted in localStorage) ----
+            const SESSIONS_KEY = 'defectAI.sessions.v1';
+            const ACTIVE_KEY = 'defectAI.activeId.v1';
+            let sessions = [];
+            let activeId = null;
             let busy = false;
-            // Pending attachment for the NEXT message (data URL after downsize).
-            let attachedImage = null;
+            let attachedImage = null; // pending image for the next send
+
+            function loadSessions() {
+                try {
+                    sessions = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+                    activeId = localStorage.getItem(ACTIVE_KEY) || null;
+                } catch (e) { sessions = []; activeId = null; }
+                if (!Array.isArray(sessions)) sessions = [];
+                if (sessions.length === 0) {
+                    createSession(false); // creates and sets active
+                } else if (!sessions.find(s => s.id === activeId)) {
+                    activeId = sessions[0].id;
+                }
+            }
+            function saveSessions() {
+                try {
+                    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+                    if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
+                } catch (e) { /* quota exceeded — silent fail */ }
+            }
+            function getActive() { return sessions.find(s => s.id === activeId); }
+            function createSession(rerender) {
+                const s = {
+                    id: 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                    title: '新對話',
+                    tags: [],
+                    history: [],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+                sessions.unshift(s);
+                activeId = s.id;
+                saveSessions();
+                if (rerender !== false) {
+                    renderSessionList();
+                    renderActiveSession();
+                    clearAttachment();
+                    input.focus();
+                }
+            }
+            function switchSession(id) {
+                if (busy) return;
+                activeId = id;
+                saveSessions();
+                renderSessionList();
+                renderActiveSession();
+                clearAttachment();
+            }
+            function deleteSession(id) {
+                if (busy) return; // would leave in-flight reply orphaned
+                const s = sessions.find(x => x.id === id);
+                if (!s) return;
+                if (!confirm('刪除這個對話?\n「' + (s.title || '新對話') + '」')) return;
+                sessions = sessions.filter(x => x.id !== id);
+                if (activeId === id) {
+                    activeId = sessions.length > 0 ? sessions[0].id : null;
+                }
+                if (sessions.length === 0) {
+                    createSession(false);
+                }
+                saveSessions();
+                renderSessionList();
+                renderActiveSession();
+            }
+            function maybeAutoTitle(s, text) {
+                if (s.title === '新對話' && text) {
+                    const t = text.replace(/\s+/g, ' ').trim();
+                    s.title = t.length > 26 ? t.slice(0, 26) + '...' : t;
+                    titleInput.value = s.title;
+                }
+            }
 
             function open() {
                 panel.hidden = false;
                 bubble.classList.add('open');
                 updateCaseCount();
-                if (history.length === 0) {
+                renderSessionList();
+                renderActiveSession();
+                setTimeout(() => input.focus(), 0);
+            }
+            // ---- Render: session list, header, tags, messages ----
+            function renderSessionList() {
+                sessionListEl.innerHTML = '';
+                sessions.forEach(s => {
+                    const item = document.createElement('div');
+                    item.className = 'ai-sess' + (s.id === activeId ? ' active' : '');
+                    item.setAttribute('data-id', s.id);
+                    const title = document.createElement('div');
+                    title.className = 'ai-sess-title';
+                    title.textContent = s.title || '新對話';
+                    item.appendChild(title);
+                    if (s.tags && s.tags.length > 0) {
+                        const tagsEl = document.createElement('div');
+                        tagsEl.className = 'ai-sess-tags';
+                        s.tags.forEach(t => {
+                            const tag = document.createElement('span');
+                            tag.className = 'tag';
+                            tag.textContent = t;
+                            tagsEl.appendChild(tag);
+                        });
+                        item.appendChild(tagsEl);
+                    }
+                    const del = document.createElement('button');
+                    del.type = 'button';
+                    del.className = 'ai-sess-del';
+                    del.title = '刪除此對話';
+                    del.textContent = '×';
+                    del.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteSession(s.id);
+                    });
+                    item.appendChild(del);
+                    item.addEventListener('click', () => switchSession(s.id));
+                    sessionListEl.appendChild(item);
+                });
+            }
+            function renderActiveSession() {
+                const s = getActive();
+                msgs.innerHTML = '';
+                if (!s) return;
+                titleInput.value = s.title || '';
+                renderActiveTags();
+                if (s.history.length === 0) {
                     const n = state.cases.length;
                     appendMessage('assistant',
                         n > 0
                             ? '你好,我已掌握目前頁面上的 ' + n + ' 筆 case 資料,可以根據這些內容回答問題。'
                             : '你好,目前頁面上還沒有 case 資料。請先新增幾筆後再問我。');
+                } else {
+                    s.history.forEach(m => {
+                        if (m.role === 'user') {
+                            if (Array.isArray(m.content)) {
+                                const t = (m.content.find(p => p.type === 'text') || {}).text || '';
+                                const u = (m.content.find(p => p.type === 'image_url') || {}).image_url;
+                                appendUserMessage(t, u ? u.url : null);
+                            } else {
+                                appendUserMessage(m.content, null);
+                            }
+                        } else if (m.role === 'assistant') {
+                            appendMessage('assistant', m.content);
+                        }
+                    });
                 }
-                setTimeout(() => input.focus(), 0);
             }
+            function renderActiveTags() {
+                tagsRow.innerHTML = '';
+                const s = getActive();
+                if (!s) return;
+                (s.tags || []).forEach(t => {
+                    const chip = document.createElement('span');
+                    chip.className = 'ai-tag-chip';
+                    chip.textContent = t;
+                    const x = document.createElement('button');
+                    x.type = 'button';
+                    x.className = 'x';
+                    x.title = '移除';
+                    x.textContent = '×';
+                    x.addEventListener('click', () => {
+                        s.tags = s.tags.filter(v => v !== t);
+                        s.updatedAt = Date.now();
+                        saveSessions();
+                        renderActiveTags();
+                        renderSessionList();
+                    });
+                    chip.appendChild(x);
+                    tagsRow.appendChild(chip);
+                });
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'ai-tag-add';
+                add.textContent = '+ 標籤';
+                add.addEventListener('click', () => {
+                    const raw = prompt('輸入標籤(可用逗號分隔多個):');
+                    if (!raw) return;
+                    const parts = raw.split(/[,，;；]/).map(x => x.trim()).filter(Boolean);
+                    if (parts.length === 0) return;
+                    s.tags = s.tags || [];
+                    parts.forEach(p => { if (!s.tags.includes(p)) s.tags.push(p); });
+                    s.updatedAt = Date.now();
+                    saveSessions();
+                    renderActiveTags();
+                    renderSessionList();
+                });
+                tagsRow.appendChild(add);
+            }
+            // Title rename: commit on blur or Enter
+            titleInput.addEventListener('blur', () => {
+                const s = getActive();
+                if (!s) return;
+                const v = titleInput.value.trim() || '新對話';
+                if (v !== s.title) {
+                    s.title = v;
+                    s.updatedAt = Date.now();
+                    saveSessions();
+                    renderSessionList();
+                }
+            });
+            titleInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); titleInput.blur(); }
+            });
+            newChatBtn.addEventListener('click', () => {
+                if (busy) return; // would leave in-flight reply orphaned
+                createSession(true);
+            });
             function updateCaseCount() {
                 const el = document.getElementById('aiCaseCount');
                 if (el) el.textContent = '已載入 ' + state.cases.length + ' 筆 case';
@@ -1978,6 +2320,8 @@
                 const text = input.value.trim();
                 const img = attachedImage; // snapshot before clearing
                 if (!text && !img) return;
+                const s = getActive();
+                if (!s) return;
 
                 // Build the user turn. With an image we use the OpenAI multimodal
                 // content array; text-only stays as a plain string for simplicity.
@@ -1995,8 +2339,13 @@
 
                 input.value = '';
                 clearAttachment();
+                // First user message becomes the auto-title (if user hasn't renamed yet).
+                if (s.history.length === 0) maybeAutoTitle(s, displayText);
                 appendUserMessage(displayText, img);
-                history.push({ role: 'user', content: userContent });
+                s.history.push({ role: 'user', content: userContent });
+                s.updatedAt = Date.now();
+                saveSessions();
+                renderSessionList();
                 busy = true;
                 sendBtn.disabled = true;
                 const typing = appendTyping();
@@ -2012,7 +2361,7 @@
                             content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。\n\n【重要格式規定】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。\n\n若使用者上傳圖片,請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位(defectType / map / position / waferTrend / rootCause / parts 等)推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
                         });
                     }
-                    messages.push(...history);
+                    messages.push(...s.history);
                     const res = await fetch('DefectLessonLearn.aspx?op=chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -2024,17 +2373,21 @@
                         const err = (data && (data.error || data.detail)) || ('HTTP ' + res.status);
                         appendMessage('assistant', '錯誤: ' + err, 'error');
                         // Drop the failed user turn so the next attempt starts clean
-                        history.pop();
+                        s.history.pop();
+                        saveSessions();
                         return;
                     }
                     // Standard OpenAI-format response
                     const reply = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '(空回應)';
                     appendMessage('assistant', reply);
-                    history.push({ role: 'assistant', content: reply });
+                    s.history.push({ role: 'assistant', content: reply });
+                    s.updatedAt = Date.now();
+                    saveSessions();
                 } catch (e) {
                     typing.remove();
                     appendMessage('assistant', '網路錯誤: ' + e.message, 'error');
-                    history.pop();
+                    s.history.pop();
+                    saveSessions();
                 } finally {
                     busy = false;
                     sendBtn.disabled = false;
@@ -2048,6 +2401,12 @@
                     send();
                 }
             });
+
+            // ---- Boot: load saved sessions, populate sidebar+title now so
+            //          the first open() has no flicker. Title text is set
+            //          when the user opens the panel via renderActiveSession().
+            loadSessions();
+            renderSessionList();
         })();
     </script>
 </body>
