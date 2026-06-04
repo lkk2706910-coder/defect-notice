@@ -607,6 +607,102 @@
         .col-trend { min-width: 110px; }
         .col-pos { min-width: 100px; }
         .col-other { min-width: 130px; }
+
+        /* ===== AI assistant floating bubble + panel ===== */
+        #aiBubble {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+            color: #fff;
+            font-weight: 700;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45), 0 2px 6px rgba(0,0,0,0.25);
+            z-index: 9999;
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+        #aiBubble:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(37, 99, 235, 0.55), 0 3px 8px rgba(0,0,0,0.3); }
+        #aiBubble.open { transform: scale(0.9); }
+        #aiPanel {
+            position: fixed;
+            right: 22px;
+            bottom: 90px;
+            width: 380px;
+            height: 540px;
+            max-height: calc(100vh - 120px);
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 9999;
+        }
+        #aiPanel[hidden] { display: none; }
+        .ai-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: linear-gradient(135deg, rgba(99,179,237,0.15), rgba(37,99,235,0.10));
+            border-bottom: 1px solid var(--border);
+        }
+        .ai-title { font-weight: 600; color: var(--text); font-size: 14px; }
+        .ai-title small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+        #aiClose {
+            background: transparent; border: none; color: var(--muted);
+            font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px;
+            border-radius: 6px;
+        }
+        #aiClose:hover { background: var(--tint-med); color: var(--text); }
+        .ai-msgs {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .ai-msg { max-width: 86%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+        .ai-msg.user { align-self: flex-end; background: var(--accent-strong); color: #fff; border-bottom-right-radius: 4px; }
+        .ai-msg.assistant { align-self: flex-start; background: var(--tint-med); color: var(--text); border-bottom-left-radius: 4px; }
+        .ai-msg.error { align-self: stretch; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); font-size: 12px; }
+        .ai-msg.typing { align-self: flex-start; background: var(--tint-med); color: var(--muted); }
+        .ai-msg.typing .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: ai-blink 1.2s infinite; }
+        .ai-msg.typing .dot:nth-child(2) { animation-delay: .2s; }
+        .ai-msg.typing .dot:nth-child(3) { animation-delay: .4s; }
+        @keyframes ai-blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+        .ai-input-wrap {
+            border-top: 1px solid var(--border);
+            padding: 10px;
+            display: flex;
+            gap: 8px;
+            background: var(--panel-elevated);
+        }
+        #aiInput {
+            flex: 1;
+            min-height: 38px;
+            max-height: 120px;
+            resize: none;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+        }
+        #aiInput:focus { border-color: var(--accent); }
+        #aiSend { white-space: nowrap; }
+        #aiSend:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -670,6 +766,19 @@
         </div>
     </div>
 
+    <!-- AI assistant floating bubble + chat panel -->
+    <button id="aiBubble" type="button" title="AI 助理">AI</button>
+    <div id="aiPanel" hidden>
+        <div class="ai-head">
+            <span class="ai-title">AI 助理 <small>設備工程小助手</small></span>
+            <button type="button" id="aiClose" title="關閉">×</button>
+        </div>
+        <div id="aiMessages" class="ai-msgs"></div>
+        <div class="ai-input-wrap">
+            <textarea id="aiInput" placeholder="輸入問題,Enter 送出,Shift+Enter 換行" rows="2"></textarea>
+            <button type="button" id="aiSend" class="btn btn-primary">送出</button>
+        </div>
+    </div>
 
     <script>
         const COLUMNS = [
@@ -1494,6 +1603,102 @@
             } catch (e) {
                 setStatus('載入失敗: ' + e.message, 'error');
             }
+        })();
+
+        // ============================================================
+        //  AI assistant — floating bubble + chat panel
+        // ============================================================
+        (function aiInit() {
+            const bubble = document.getElementById('aiBubble');
+            const panel = document.getElementById('aiPanel');
+            const closeBtn = document.getElementById('aiClose');
+            const msgs = document.getElementById('aiMessages');
+            const input = document.getElementById('aiInput');
+            const sendBtn = document.getElementById('aiSend');
+
+            // Only user/assistant turns are kept here; the system prompt is
+            // injected by the server from web.config on every request.
+            const history = [];
+            let busy = false;
+
+            function open() {
+                panel.hidden = false;
+                bubble.classList.add('open');
+                if (history.length === 0) {
+                    appendMessage('assistant', '你好,我是設備工程小助手。可以問我關於 defect lesson learn 的問題。');
+                }
+                setTimeout(() => input.focus(), 0);
+            }
+            function close() {
+                panel.hidden = true;
+                bubble.classList.remove('open');
+            }
+            bubble.addEventListener('click', () => panel.hidden ? open() : close());
+            closeBtn.addEventListener('click', close);
+
+            function appendMessage(role, text, cls) {
+                const div = document.createElement('div');
+                div.className = 'ai-msg ' + (cls || role);
+                div.textContent = text;
+                msgs.appendChild(div);
+                msgs.scrollTop = msgs.scrollHeight;
+                return div;
+            }
+            function appendTyping() {
+                const div = document.createElement('div');
+                div.className = 'ai-msg typing';
+                div.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+                msgs.appendChild(div);
+                msgs.scrollTop = msgs.scrollHeight;
+                return div;
+            }
+
+            async function send() {
+                if (busy) return;
+                const text = input.value.trim();
+                if (!text) return;
+                input.value = '';
+                appendMessage('user', text);
+                history.push({ role: 'user', content: text });
+                busy = true;
+                sendBtn.disabled = true;
+                const typing = appendTyping();
+                try {
+                    const res = await fetch('DefectLessonLearn.aspx?op=chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                        body: JSON.stringify({ messages: history })
+                    });
+                    const data = await res.json();
+                    typing.remove();
+                    if (!res.ok || data.ok === false) {
+                        const err = (data && (data.error || data.detail)) || ('HTTP ' + res.status);
+                        appendMessage('assistant', '錯誤: ' + err, 'error');
+                        // Drop the failed user turn so the next attempt starts clean
+                        history.pop();
+                        return;
+                    }
+                    // Standard OpenAI-format response
+                    const reply = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '(空回應)';
+                    appendMessage('assistant', reply);
+                    history.push({ role: 'assistant', content: reply });
+                } catch (e) {
+                    typing.remove();
+                    appendMessage('assistant', '網路錯誤: ' + e.message, 'error');
+                    history.pop();
+                } finally {
+                    busy = false;
+                    sendBtn.disabled = false;
+                    input.focus();
+                }
+            }
+            sendBtn.addEventListener('click', send);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                }
+            });
         })();
     </script>
 </body>

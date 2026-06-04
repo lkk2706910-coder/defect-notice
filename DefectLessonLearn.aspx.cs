@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
+using System.Net;
 using System.Web;
 using System.Web.Script.Serialization;
 
@@ -58,6 +60,10 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             else if (string.Equals(op, "delete", StringComparison.OrdinalIgnoreCase))
             {
                 HandleDelete(path);
+            }
+            else if (string.Equals(op, "chat", StringComparison.OrdinalIgnoreCase))
+            {
+                HandleChat();
             }
             else
             {
@@ -195,6 +201,97 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             WriteAtomic(path, ser.Serialize(doc));
         }
         Response.Write("{\"ok\":true}");
+    }
+
+    // ---- AI assistant proxy ----
+    // Client posts { messages: [{role, content}, ...] }.
+    // We prepend the configured system prompt and forward to the LLM gateway,
+    // keeping the api-key on the server so it never reaches the browser.
+    private void HandleChat()
+    {
+        string url = ConfigurationManager.AppSettings["AiGatewayUrl"];
+        string apiKey = ConfigurationManager.AppSettings["AiApiKey"];
+        string userId = ConfigurationManager.AppSettings["AiUserId"];
+        string systemPrompt = ConfigurationManager.AppSettings["AiSystemPrompt"];
+        if (string.IsNullOrEmpty(systemPrompt)) systemPrompt = "你是設備工程小助手";
+
+        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(apiKey))
+        {
+            Response.StatusCode = 500;
+            Response.Write("{\"ok\":false,\"error\":\"AiGatewayUrl / AiApiKey not configured in web.config\"}");
+            return;
+        }
+
+        string body = ReadBody();
+        var ser = NewSerializer();
+        Dictionary<string, object> clientReq;
+        try
+        {
+            clientReq = ser.Deserialize<Dictionary<string, object>>(body) ?? new Dictionary<string, object>();
+        }
+        catch
+        {
+            Response.StatusCode = 400;
+            Response.Write("{\"ok\":false,\"error\":\"invalid json\"}");
+            return;
+        }
+
+        // Build the message list: system prompt first, then whatever the client sent.
+        var messages = new ArrayList();
+        messages.Add(new Dictionary<string, object> {
+            { "role", "system" },
+            { "content", systemPrompt }
+        });
+        object clientMessages;
+        if (clientReq.TryGetValue("messages", out clientMessages) && clientMessages is ArrayList)
+        {
+            foreach (var m in (ArrayList)clientMessages)
+            {
+                if (m != null) messages.Add(m);
+            }
+        }
+
+        var payload = new Dictionary<string, object> { { "messages", messages } };
+        byte[] payloadBytes = System.Text.Encoding.UTF8.GetBytes(ser.Serialize(payload));
+
+        // Allow plain HTTP to a non-DNS internal IP without strict cert/SNI hassles.
+        var req = (HttpWebRequest)WebRequest.Create(url);
+        req.Method = "POST";
+        req.Accept = "*/*";
+        req.ContentType = "application/json";
+        req.Headers["api-key"] = apiKey;
+        if (!string.IsNullOrEmpty(userId)) req.Headers["user-id"] = userId;
+        req.Timeout = 120000;          // 2 min: LLM responses can be slow
+        req.ReadWriteTimeout = 120000;
+        req.ContentLength = payloadBytes.Length;
+
+        try
+        {
+            using (var s = req.GetRequestStream()) s.Write(payloadBytes, 0, payloadBytes.Length);
+            using (var resp = (HttpWebResponse)req.GetResponse())
+            using (var sr = new StreamReader(resp.GetResponseStream(), System.Text.Encoding.UTF8))
+            {
+                Response.Write(sr.ReadToEnd());
+            }
+        }
+        catch (WebException wex)
+        {
+            string detail = "";
+            int status = 502;
+            var httpResp = wex.Response as HttpWebResponse;
+            if (httpResp != null)
+            {
+                status = (int)httpResp.StatusCode;
+                try
+                {
+                    using (var sr = new StreamReader(httpResp.GetResponseStream(), System.Text.Encoding.UTF8))
+                        detail = sr.ReadToEnd();
+                }
+                catch { }
+            }
+            Response.StatusCode = status;
+            Response.Write("{\"ok\":false,\"error\":\"" + JsonEscape(wex.Message) + "\",\"detail\":" + ser.Serialize(detail) + "}");
+        }
     }
 
     // ---- Helpers ----
