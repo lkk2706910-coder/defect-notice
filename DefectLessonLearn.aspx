@@ -606,8 +606,57 @@
         }
         .mode-toggle:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
         body.view-mode .mode-toggle { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
-        body.view-mode .mode-toggle-label::before { content: '唯讀中 (點此編輯)'; }
-        body:not(.view-mode) .mode-toggle-label::before { content: '編輯中 (點此鎖定)'; }
+        /* Label text is set imperatively by updateModeToggleLabel() so it can
+           include the logged-in user's name dynamically. */
+        /* Login modal */
+        .login-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-overlay[hidden] { display: none; }
+        .login-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 22px 24px;
+            min-width: 320px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .login-card h3 { margin: 0 0 14px; color: var(--text); font-size: 16px; }
+        .login-card label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+        .login-card input[type="text"],
+        .login-card input[type="password"] {
+            width: 100%; box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+        }
+        .login-card input:focus { border-color: var(--accent); }
+        .login-card .err {
+            display: none;
+            margin-top: 10px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: var(--warn);
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            border-radius: 6px;
+        }
+        .login-card .err.show { display: block; }
+        .login-card .actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
         /* View-mode hides every UI that can mutate data */
         body.view-mode #btnAdd,
         body.view-mode #btnSave,
@@ -976,6 +1025,23 @@
     </style>
 </head>
 <body>
+    <!-- Login modal (shown when entering edit mode without a valid token) -->
+    <div id="loginOverlay" class="login-overlay" hidden>
+        <div class="login-card">
+            <h3>進入編輯模式</h3>
+            <form id="loginForm">
+                <label>使用者</label>
+                <input type="text" id="loginUser" autocomplete="username" required />
+                <label>密碼</label>
+                <input type="password" id="loginPwd" autocomplete="current-password" required />
+                <div class="err" id="loginErr"></div>
+                <div class="actions">
+                    <button type="button" id="loginCancel" class="btn">取消</button>
+                    <button type="submit" id="loginSubmit" class="btn btn-primary">登入</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="container">
         <div class="header">
             <h1>Defect Case Lesson Learn</h1>
@@ -1112,7 +1178,10 @@
             // Defaults to TRUE so first-time visitors can't accidentally edit
             // while browsing; persisted in localStorage so daily editors only
             // need to toggle once.
-            viewMode: (localStorage.getItem('defectLL.viewMode') !== '0')
+            // Edit mode requires a login (token in sessionStorage). On a fresh
+            // tab there is no token, so even if localStorage says "編輯", we
+            // start in view mode and require the user to log in.
+            viewMode: (localStorage.getItem('defectLL.viewMode') !== '0') || !sessionStorage.getItem('defectLL.authToken')
         };
         // Apply the initial body class before the first render so cells get
         // contenteditable set correctly the first time.
@@ -1839,26 +1908,140 @@
             try { localStorage.setItem('defect-lesson-theme', next); } catch (e) {}
         });
 
-        // ---- View / Edit mode ----
-        $('#modeToggle').addEventListener('click', () => {
-            // Warn before entering view mode while unsaved changes are pending,
-            // since the 儲存 button will be hidden the moment we switch.
-            if (!state.viewMode) {
-                const pending = state.dirtyIds.size + state.deletedIds.size;
-                if (pending > 0) {
-                    if (!confirm('還有 ' + pending + ' 筆未儲存的變更。\n進入唯讀模式會看不到儲存按鈕,變更仍會留在記憶體裡。要繼續嗎?')) return;
-                }
-            }
-            state.viewMode = !state.viewMode;
-            document.body.classList.toggle('view-mode', state.viewMode);
-            try { localStorage.setItem('defectLL.viewMode', state.viewMode ? '1' : '0'); } catch (e) {}
-            // Drop any half-armed paste/image-cell state so a stale Ctrl-V
-            // can't slip past the new mode.
-            if (state.viewMode) {
-                state.pendingImageCell = null;
-                clearPasteHighlight();
-            }
+        // ---- Auth (session-scoped token in sessionStorage) ----
+        // Token expires when the tab is closed OR after the server-side TTL
+        // (web.config SessionHours), whichever comes first. The server signals
+        // expiry via 401 -> we forceLogout() and prompt re-login.
+        function getAuthToken() { try { return sessionStorage.getItem('defectLL.authToken'); } catch (e) { return null; } }
+        function getAuthUser()  { try { return sessionStorage.getItem('defectLL.authUser') || ''; } catch (e) { return ''; } }
+        function setAuth(token, name) {
+            try {
+                sessionStorage.setItem('defectLL.authToken', token);
+                sessionStorage.setItem('defectLL.authUser', name);
+            } catch (e) {}
+            updateModeToggleLabel();
+        }
+        function forceLogout(reason) {
+            try { sessionStorage.removeItem('defectLL.authToken'); sessionStorage.removeItem('defectLL.authUser'); } catch (e) {}
+            state.viewMode = true;
+            document.body.classList.add('view-mode');
+            try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
+            updateModeToggleLabel();
             renderAll();
+            if (reason) alert(reason);
+        }
+        // Wrap fetch to auto-attach the auth header and centralize 401 handling.
+        async function authFetch(url, opts) {
+            opts = opts || {};
+            const headers = Object.assign({}, opts.headers || {});
+            const tok = getAuthToken();
+            if (tok) headers['X-Auth-Token'] = tok;
+            const res = await fetch(url, Object.assign({}, opts, { headers: headers }));
+            if (res.status === 401) {
+                // Read once so the caller can still inspect data if it cares.
+                let msg = 'Session 過期或未登入,請重新登入。';
+                try { const j = await res.clone().json(); if (j && j.error) msg = j.error; } catch (e) {}
+                forceLogout(msg);
+            }
+            return res;
+        }
+        // Login modal wiring
+        const loginOverlay = document.getElementById('loginOverlay');
+        const loginForm = document.getElementById('loginForm');
+        const loginUser = document.getElementById('loginUser');
+        const loginPwd  = document.getElementById('loginPwd');
+        const loginErr  = document.getElementById('loginErr');
+        let pendingAfterLogin = null;
+        function openLogin(onSuccess) {
+            pendingAfterLogin = onSuccess || null;
+            loginErr.classList.remove('show');
+            loginErr.textContent = '';
+            loginUser.value = getAuthUser() || '';
+            loginPwd.value = '';
+            loginOverlay.hidden = false;
+            setTimeout(() => (loginUser.value ? loginPwd : loginUser).focus(), 0);
+        }
+        function closeLogin() {
+            loginOverlay.hidden = true;
+            pendingAfterLogin = null;
+        }
+        document.getElementById('loginCancel').addEventListener('click', closeLogin);
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginErr.classList.remove('show');
+            const username = loginUser.value.trim();
+            const password = loginPwd.value;
+            if (!username || !password) return;
+            const submitBtn = document.getElementById('loginSubmit');
+            submitBtn.disabled = true;
+            try {
+                const res = await fetch('DefectLessonLearn.aspx?op=login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    loginErr.textContent = data.error || ('登入失敗 (' + res.status + ')');
+                    loginErr.classList.add('show');
+                    return;
+                }
+                setAuth(data.token, data.name);
+                const cb = pendingAfterLogin;
+                closeLogin();
+                if (cb) cb();
+            } catch (err) {
+                loginErr.textContent = '網路錯誤: ' + err.message;
+                loginErr.classList.add('show');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+        function updateModeToggleLabel() {
+            const btn = document.querySelector('#modeToggle .mode-toggle-label');
+            if (!btn) return;
+            if (state.viewMode) {
+                const u = getAuthUser();
+                btn.textContent = u ? ('唯讀中 — ' + u + ' (點此編輯)') : '唯讀中 (點此編輯)';
+            } else {
+                const u = getAuthUser();
+                btn.textContent = u ? ('編輯中: ' + u + ' (點此鎖定)') : '編輯中 (點此鎖定)';
+            }
+        }
+
+        // ---- View / Edit mode ----
+        function enterEditMode() {
+            state.viewMode = false;
+            document.body.classList.remove('view-mode');
+            try { localStorage.setItem('defectLL.viewMode', '0'); } catch (e) {}
+            updateModeToggleLabel();
+            renderAll();
+        }
+        function enterViewMode() {
+            state.viewMode = true;
+            document.body.classList.add('view-mode');
+            try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
+            state.pendingImageCell = null;
+            clearPasteHighlight();
+            updateModeToggleLabel();
+            renderAll();
+        }
+        $('#modeToggle').addEventListener('click', () => {
+            if (state.viewMode) {
+                // -> edit. Require login.
+                if (!getAuthToken()) {
+                    openLogin(() => enterEditMode());
+                    return;
+                }
+                enterEditMode();
+                return;
+            }
+            // -> view. Warn if there are unsaved changes (save button will hide).
+            const pending = state.dirtyIds.size + state.deletedIds.size;
+            if (pending > 0) {
+                if (!confirm('還有 ' + pending + ' 筆未儲存的變更。\n進入唯讀模式會看不到儲存按鈕,變更仍會留在記憶體裡。要繼續嗎?')) return;
+            }
+            enterViewMode();
         });
 
         // ---- Usage hint show/hide (remembered in localStorage) ----
@@ -1930,7 +2113,7 @@
                         state.dirtyIds.delete(id);
                         continue;
                     }
-                    const res = await fetch('DefectLessonLearn.aspx?op=upsert', {
+                    const res = await authFetch('DefectLessonLearn.aspx?op=upsert', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json; charset=utf-8' },
                         body: JSON.stringify(c)
@@ -1942,7 +2125,7 @@
                 // Deletes
                 for (const id of deletedIds) {
                     setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
-                    const res = await fetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), { method: 'POST' });
+                    const res = await authFetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), { method: 'POST' });
                     const data = await res.json();
                     if (!data || !data.ok) throw new Error('delete ' + id + ': ' + (data && data.error || res.status));
                     state.deletedIds.delete(id);
@@ -2002,6 +2185,7 @@
                 state.dirtyIds.clear();
                 state.deletedIds.clear();
                 decorateHeaders();
+                updateModeToggleLabel();
                 renderAll();
             } catch (e) {
                 setStatus('載入失敗: ' + e.message, 'error');
