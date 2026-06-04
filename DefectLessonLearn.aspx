@@ -590,6 +590,33 @@
         [data-theme="dark"] .theme-toggle-label::before { content: 'Light'; }
         [data-theme="light"] .theme-toggle-label::before { content: 'Dark'; }
 
+        /* View / Edit mode toggle (same pill shape as theme toggle) */
+        .mode-toggle {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--chip);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .mode-toggle:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
+        body.view-mode .mode-toggle { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
+        body.view-mode .mode-toggle-label::before { content: '唯讀中 (點此編輯)'; }
+        body:not(.view-mode) .mode-toggle-label::before { content: '編輯中 (點此鎖定)'; }
+        /* View-mode hides every UI that can mutate data */
+        body.view-mode #btnAdd,
+        body.view-mode #btnSave,
+        body.view-mode table.cases td.actions,
+        body.view-mode table.cases thead th:last-child,
+        body.view-mode td.img-cell .thumb-x,
+        body.view-mode td.img-cell .img-empty,
+        body.view-mode [data-act="edit-link"] { display: none !important; }
+        /* In view mode, non-editable cells stop showing the text caret */
+        body.view-mode .cell-text { cursor: default; }
+        body.view-mode .cell-text:focus { outline: none; box-shadow: none; }
+
         .col-img { min-width: 190px; }
         .col-date { min-width: 100px; }
         .col-cat { min-width: 140px; }
@@ -956,6 +983,9 @@
                 <button type="button" id="btnClearFilters" class="btn" title="清除所有排序與篩選">↻ 清除篩選</button>
                 <button type="button" id="btnSave" class="btn">儲存</button>
                 <button type="button" id="btnHelp" class="btn-help" title="顯示操作提示" style="display:none;">?</button>
+                <button type="button" id="modeToggle" class="mode-toggle" title="切換唯讀 / 編輯模式">
+                    <span class="mode-toggle-label"></span>
+                </button>
                 <button type="button" id="themeToggle" class="theme-toggle" title="切換深色 / 淺色">
                     <span class="theme-toggle-icon"></span>
                     <span class="theme-toggle-label"></span>
@@ -1073,8 +1103,17 @@
             deletedIds: new Set(),
             loadedIds: new Set(),
             // Set by the AI panel via applyAiFilter(); null = no AI filter.
-            aiFilterIds: null
+            aiFilterIds: null,
+            // View-only mode: cells become non-editable and all mutation UI
+            // (+ 新增 / 儲存 / 刪除 / image upload / link edit) is hidden.
+            // Defaults to TRUE so first-time visitors can't accidentally edit
+            // while browsing; persisted in localStorage so daily editors only
+            // need to toggle once.
+            viewMode: (localStorage.getItem('defectLL.viewMode') !== '0')
         };
+        // Apply the initial body class before the first render so cells get
+        // contenteditable set correctly the first time.
+        if (state.viewMode) document.body.classList.add('view-mode');
 
         const $ = (sel) => document.querySelector(sel);
         const tbody = $('#tbody');
@@ -1170,6 +1209,12 @@
                     }
                     td.innerHTML = html;
                     td.addEventListener('click', (ev) => {
+                        // View mode: still allow zooming on a thumbnail image,
+                        // but no remove / clear / paste-mode activation.
+                        if (state.viewMode) {
+                            if (ev.target.tagName === 'IMG') openOverlay(ev.target.src);
+                            return;
+                        }
                         // × on a thumb -> remove that one
                         const xBtn = ev.target.closest && ev.target.closest('.thumb-x');
                         if (xBtn) {
@@ -1207,6 +1252,7 @@
 
                     // ---- Drag-and-drop image files ----
                     td.addEventListener('dragover', (ev) => {
+                        if (state.viewMode) return;
                         ev.preventDefault();
                         td.classList.add('drop-target');
                     });
@@ -1214,6 +1260,7 @@
                         td.classList.remove('drop-target');
                     });
                     td.addEventListener('drop', (ev) => {
+                        if (state.viewMode) return;
                         ev.preventDefault();
                         td.classList.remove('drop-target');
                         const files = Array.from((ev.dataTransfer && ev.dataTransfer.files) || [])
@@ -1253,16 +1300,20 @@
                     td.addEventListener('click', (ev) => {
                         const btn = ev.target.closest && ev.target.closest('[data-act="edit-link"]');
                         if (!btn) return;
+                        if (state.viewMode) return;
                         openLinkEditor(c, col.key, td);
                     });
                 } else {
                     td.className = 'editable';
                     const v = c[col.key] || '';
-                    td.innerHTML = '<div class="cell-text" contenteditable="true" data-key="' + col.key + '">' + escapeHtml(v) + '</div>';
+                    const editable = state.viewMode ? 'false' : 'true';
+                    td.innerHTML = '<div class="cell-text" contenteditable="' + editable + '" data-key="' + col.key + '">' + escapeHtml(v) + '</div>';
                 }
 
-                if (td.querySelector('.cell-text[contenteditable]')) {
-                    wireEditable(td.querySelector('.cell-text[contenteditable]'), c);
+                // Only wire edit handlers when the cell is actually editable —
+                // otherwise paste/blur listeners run unnecessarily in view mode.
+                if (!state.viewMode && td.querySelector('.cell-text[contenteditable="true"]')) {
+                    wireEditable(td.querySelector('.cell-text[contenteditable="true"]'), c);
                 }
 
                 tr.appendChild(td);
@@ -1705,6 +1756,7 @@
         // Stays in paste mode after a successful paste so the user can press
         // Ctrl+V repeatedly to append multiple images without re-clicking 貼上.
         document.addEventListener('paste', (ev) => {
+            if (state.viewMode) return;
             if (!state.pendingImageCell) return;
             const items = (ev.clipboardData && ev.clipboardData.items) || [];
             for (const it of items) {
@@ -1765,6 +1817,28 @@
             const next = cur === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', next);
             try { localStorage.setItem('defect-lesson-theme', next); } catch (e) {}
+        });
+
+        // ---- View / Edit mode ----
+        $('#modeToggle').addEventListener('click', () => {
+            // Warn before entering view mode while unsaved changes are pending,
+            // since the 儲存 button will be hidden the moment we switch.
+            if (!state.viewMode) {
+                const pending = state.dirtyIds.size + state.deletedIds.size;
+                if (pending > 0) {
+                    if (!confirm('還有 ' + pending + ' 筆未儲存的變更。\n進入唯讀模式會看不到儲存按鈕,變更仍會留在記憶體裡。要繼續嗎?')) return;
+                }
+            }
+            state.viewMode = !state.viewMode;
+            document.body.classList.toggle('view-mode', state.viewMode);
+            try { localStorage.setItem('defectLL.viewMode', state.viewMode ? '1' : '0'); } catch (e) {}
+            // Drop any half-armed paste/image-cell state so a stale Ctrl-V
+            // can't slip past the new mode.
+            if (state.viewMode) {
+                state.pendingImageCell = null;
+                clearPasteHighlight();
+            }
+            renderAll();
         });
 
         // ---- Usage hint show/hide (remembered in localStorage) ----
