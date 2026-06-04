@@ -325,20 +325,17 @@ public partial class DefectLessonLearn : System.Web.UI.Page
 
     // ---- Auth: login / logout / whoami / admin add user ----
     // Gate function used by every mutating op. Reads X-Auth-Token header,
-    // looks it up in the in-memory token table, applies expiry, and writes
-    // a 401 response if invalid. Returns false when the caller should bail.
+    // looks it up in the in-memory token table, applies expiry. When auth
+    // fails we deliberately keep the HTTP status at 200 — sending 401 here
+    // lets IIS bolt on a WWW-Authenticate header that triggers a native
+    // browser sign-in popup we have no way to disable from app code. The
+    // client checks the JSON body for {ok:false, error:"needLogin"} instead.
     private bool RequireAuth()
     {
-        // Don't let IIS rewrite our 401 into a WWW-Authenticate challenge —
-        // otherwise the browser pops its native "sign in to umcesidb02" prompt
-        // and asks for Windows / server credentials, which we don't use.
-        Response.TrySkipIisCustomErrors = true;
-        Response.Headers.Remove("WWW-Authenticate");
         string token = Request.Headers["X-Auth-Token"];
         if (string.IsNullOrEmpty(token))
         {
-            Response.StatusCode = 401;
-            Response.Write("{\"ok\":false,\"error\":\"login required\"}");
+            Response.Write("{\"ok\":false,\"error\":\"needLogin\"}");
             return false;
         }
         TokenInfo info;
@@ -346,20 +343,16 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         {
             if (!_tokens.TryGetValue(token, out info))
             {
-                Response.StatusCode = 401;
-                Response.Write("{\"ok\":false,\"error\":\"invalid token\"}");
+                Response.Write("{\"ok\":false,\"error\":\"needLogin\"}");
                 return false;
             }
             if (info.ExpiresAt < DateTime.UtcNow)
             {
                 _tokens.Remove(token);
-                Response.StatusCode = 401;
-                Response.Write("{\"ok\":false,\"error\":\"session expired, please log in again\"}");
+                Response.Write("{\"ok\":false,\"error\":\"needLogin\"}");
                 return false;
             }
         }
-        // Optional: expose the username so individual ops could write it to
-        // an audit log later. Stashed on HttpContext.Items for that purpose.
         HttpContext.Current.Items["AuthUser"] = info.Name;
         return true;
     }
@@ -396,7 +389,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             if (_failures.TryGetValue(name, out fi) && fi.LockedUntil > DateTime.UtcNow)
             {
                 int waitSec = (int)Math.Ceiling((fi.LockedUntil - DateTime.UtcNow).TotalSeconds);
-                Response.StatusCode = 429;
+                // Keep HTTP 200 — see RequireAuth() for why we don't use 4xx here.
                 Response.Write("{\"ok\":false,\"error\":\"locked\",\"retryAfter\":" + waitSec + "}");
                 return;
             }
@@ -427,7 +420,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
                     fi.Count = 0;
                 }
             }
-            Response.StatusCode = 401;
+            // Keep HTTP 200 — see RequireAuth() for the IIS-popup reason.
             Response.Write("{\"ok\":false,\"error\":\"bad_credentials\"}");
             return;
         }
@@ -490,7 +483,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         string givenKey = req.ContainsKey("adminKey") ? (req["adminKey"] ?? "").ToString() : "";
         if (!ConstantTimeEquals(adminKey, givenKey))
         {
-            Response.StatusCode = 401;
+            // Keep HTTP 200 — see RequireAuth() for the IIS-popup reason.
             Response.Write("{\"ok\":false,\"error\":\"bad adminKey\"}");
             return;
         }

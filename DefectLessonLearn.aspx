@@ -1930,19 +1930,23 @@
             renderAll();
             if (reason) alert(reason);
         }
-        // Wrap fetch to auto-attach the auth header and centralize 401 handling.
+        // Wrap fetch to auto-attach the auth header and centralize auth failure.
+        // Server uses HTTP 200 + {ok:false, error:"needLogin"} in the body to
+        // signal "you need to log in" — sending a real 401 would let IIS add
+        // WWW-Authenticate and pop a native browser sign-in dialog we can't
+        // dismiss from JS.
         async function authFetch(url, opts) {
             opts = opts || {};
             const headers = Object.assign({}, opts.headers || {});
             const tok = getAuthToken();
             if (tok) headers['X-Auth-Token'] = tok;
             const res = await fetch(url, Object.assign({}, opts, { headers: headers }));
-            if (res.status === 401) {
-                // Read once so the caller can still inspect data if it cares.
-                let msg = 'Session 過期或未登入,請重新登入。';
-                try { const j = await res.clone().json(); if (j && j.error) msg = j.error; } catch (e) {}
-                forceLogout(msg);
-            }
+            try {
+                const peek = await res.clone().json();
+                if (peek && peek.ok === false && peek.error === 'needLogin') {
+                    forceLogout('Session 過期或未登入,請重新登入。');
+                }
+            } catch (e) { /* not JSON body; let caller handle */ }
             return res;
         }
         // Login modal wiring
