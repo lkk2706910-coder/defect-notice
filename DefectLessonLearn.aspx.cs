@@ -390,7 +390,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             {
                 int waitSec = (int)Math.Ceiling((fi.LockedUntil - DateTime.UtcNow).TotalSeconds);
                 Response.StatusCode = 429;
-                Response.Write("{\"ok\":false,\"error\":\"帳號暫時鎖定,請 " + waitSec + " 秒後再試\"}");
+                Response.Write("{\"ok\":false,\"error\":\"locked\",\"retryAfter\":" + waitSec + "}");
                 return;
             }
         }
@@ -421,11 +421,11 @@ public partial class DefectLessonLearn : System.Web.UI.Page
                 }
             }
             Response.StatusCode = 401;
-            Response.Write("{\"ok\":false,\"error\":\"帳號或密碼錯誤\"}");
+            Response.Write("{\"ok\":false,\"error\":\"bad_credentials\"}");
             return;
         }
 
-        // Success — reset failure count, issue token
+        // Success - reset failure count, issue token
         lock (_failures) { _failures.Remove(name); }
 
         int hours = ConfigGetInt("SessionHours", 8);

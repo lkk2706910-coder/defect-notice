@@ -1982,7 +1982,14 @@
                 });
                 const data = await res.json();
                 if (!data.ok) {
-                    loginErr.textContent = data.error || ('登入失敗 (' + res.status + ')');
+                    // Server keeps error codes ASCII-only (encoding-safe);
+                    // map to user-facing Chinese here.
+                    let msg;
+                    if (data.error === 'bad_credentials') msg = '帳號或密碼錯誤';
+                    else if (data.error === 'locked') msg = '帳號暫時鎖定,請 ' + (data.retryAfter || '?') + ' 秒後再試';
+                    else if (data.error === 'username and password required') msg = '請輸入帳號與密碼';
+                    else msg = data.error || ('登入失敗 (' + res.status + ')');
+                    loginErr.textContent = msg;
                     loginErr.classList.add('show');
                     return;
                 }
