@@ -703,6 +703,53 @@
         #aiInput:focus { border-color: var(--accent); }
         #aiSend { white-space: nowrap; }
         #aiSend:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ai-icon-btn {
+            background: var(--tint-med);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            width: 38px;
+            height: 38px;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; flex: none;
+        }
+        .ai-icon-btn:hover { background: var(--tint-high); border-color: var(--accent); }
+        .ai-preview {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--panel-elevated);
+            border-top: 1px solid var(--border);
+        }
+        .ai-preview[hidden] { display: none; }
+        .ai-preview img {
+            max-height: 56px;
+            max-width: 90px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            object-fit: contain;
+            background: #000;
+        }
+        .ai-preview .ai-prev-meta { color: var(--muted); font-size: 12px; flex: 1; }
+        .ai-preview .ai-prev-remove {
+            background: var(--tint-med);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .ai-preview .ai-prev-remove:hover { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+        .ai-msg-img {
+            margin-top: 6px;
+            max-width: 220px;
+            max-height: 160px;
+            border-radius: 8px;
+            display: block;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
     </style>
 </head>
 <body>
@@ -774,8 +821,19 @@
             <button type="button" id="aiClose" title="關閉">×</button>
         </div>
         <div id="aiMessages" class="ai-msgs"></div>
+        <div id="aiPreview" class="ai-preview" hidden>
+            <img id="aiPreviewImg" alt="附加圖片" />
+            <span class="ai-prev-meta" id="aiPreviewMeta"></span>
+            <button type="button" class="ai-prev-remove" id="aiPreviewRemove" title="移除附圖">移除</button>
+        </div>
         <div class="ai-input-wrap">
-            <textarea id="aiInput" placeholder="輸入問題,Enter 送出,Shift+Enter 換行" rows="2"></textarea>
+            <button type="button" id="aiAttach" class="ai-icon-btn" title="附加圖片(可貼上)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+            </button>
+            <input type="file" id="aiFile" accept="image/*" hidden />
+            <textarea id="aiInput" placeholder="輸入問題,可附圖搜尋相關 case。Enter 送出,Shift+Enter 換行" rows="2"></textarea>
             <button type="button" id="aiSend" class="btn btn-primary">送出</button>
         </div>
     </div>
@@ -1615,11 +1673,19 @@
             const msgs = document.getElementById('aiMessages');
             const input = document.getElementById('aiInput');
             const sendBtn = document.getElementById('aiSend');
+            const attachBtn = document.getElementById('aiAttach');
+            const fileInput = document.getElementById('aiFile');
+            const previewBox = document.getElementById('aiPreview');
+            const previewImg = document.getElementById('aiPreviewImg');
+            const previewMeta = document.getElementById('aiPreviewMeta');
+            const previewRemove = document.getElementById('aiPreviewRemove');
 
             // Only user/assistant turns are kept here; the system prompt is
             // injected by the server from web.config on every request.
             const history = [];
             let busy = false;
+            // Pending attachment for the NEXT message (data URL after downsize).
+            let attachedImage = null;
 
             function open() {
                 panel.hidden = false;
@@ -1674,6 +1740,25 @@
                 msgs.scrollTop = msgs.scrollHeight;
                 return div;
             }
+            // User message bubble that can show text + an attached image.
+            function appendUserMessage(text, imgUrl) {
+                const div = document.createElement('div');
+                div.className = 'ai-msg user';
+                if (text) {
+                    const t = document.createElement('div');
+                    t.textContent = text;
+                    div.appendChild(t);
+                }
+                if (imgUrl) {
+                    const im = document.createElement('img');
+                    im.className = 'ai-msg-img';
+                    im.src = imgUrl;
+                    div.appendChild(im);
+                }
+                msgs.appendChild(div);
+                msgs.scrollTop = msgs.scrollHeight;
+                return div;
+            }
             function appendTyping() {
                 const div = document.createElement('div');
                 div.className = 'ai-msg typing';
@@ -1683,13 +1768,100 @@
                 return div;
             }
 
+            // ---- Image attachment handling ----
+            // Downscale to max 1024px on the longer side and re-encode as JPEG q=0.85.
+            // Keeps the request payload reasonable for the LLM and shrinks 4-10x typically.
+            function downsizeImage(dataUrl) {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const MAX = 1024;
+                        const longest = Math.max(img.width, img.height);
+                        if (longest <= MAX) return resolve(dataUrl);
+                        const ratio = MAX / longest;
+                        const w = Math.round(img.width * ratio);
+                        const h = Math.round(img.height * ratio);
+                        const c = document.createElement('canvas');
+                        c.width = w; c.height = h;
+                        c.getContext('2d').drawImage(img, 0, 0, w, h);
+                        try { resolve(c.toDataURL('image/jpeg', 0.85)); }
+                        catch (e) { resolve(dataUrl); }
+                    };
+                    img.onerror = () => resolve(dataUrl);
+                    img.src = dataUrl;
+                });
+            }
+            function approxKB(dataUrl) {
+                // base64 -> bytes ratio ≈ 3/4 of base64 length, minus the prefix.
+                const i = dataUrl.indexOf(',');
+                const b64 = i >= 0 ? dataUrl.slice(i + 1) : dataUrl;
+                return Math.round((b64.length * 3 / 4) / 1024);
+            }
+            function setAttachedFromFile(file) {
+                if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
+                if (file.size > 20 * 1024 * 1024) {
+                    alert('圖片太大(>20MB),請挑小一點的');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    const small = await downsizeImage(reader.result);
+                    attachedImage = small;
+                    previewImg.src = small;
+                    previewMeta.textContent = '已附圖 (' + approxKB(small) + ' KB)';
+                    previewBox.hidden = false;
+                    input.focus();
+                };
+                reader.readAsDataURL(file);
+            }
+            function clearAttachment() {
+                attachedImage = null;
+                previewBox.hidden = true;
+                previewImg.removeAttribute('src');
+                previewMeta.textContent = '';
+            }
+            attachBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', () => {
+                const f = fileInput.files && fileInput.files[0];
+                fileInput.value = ''; // allow re-picking the same file later
+                if (f) setAttachedFromFile(f);
+            });
+            previewRemove.addEventListener('click', clearAttachment);
+            // Paste an image directly into the textarea
+            input.addEventListener('paste', (ev) => {
+                const items = (ev.clipboardData && ev.clipboardData.items) || [];
+                for (const it of items) {
+                    if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
+                        const blob = it.getAsFile();
+                        if (blob) { ev.preventDefault(); setAttachedFromFile(blob); return; }
+                    }
+                }
+            });
+
             async function send() {
                 if (busy) return;
                 const text = input.value.trim();
-                if (!text) return;
+                const img = attachedImage; // snapshot before clearing
+                if (!text && !img) return;
+
+                // Build the user turn. With an image we use the OpenAI multimodal
+                // content array; text-only stays as a plain string for simplicity.
+                let userContent;
+                let displayText = text;
+                if (img) {
+                    if (!displayText) displayText = '請看這張圖,從目前頁面上的 case 中找出最相關的幾筆,並說明判斷依據。';
+                    userContent = [
+                        { type: 'text', text: displayText },
+                        { type: 'image_url', image_url: { url: img } }
+                    ];
+                } else {
+                    userContent = text;
+                }
+
                 input.value = '';
-                appendMessage('user', text);
-                history.push({ role: 'user', content: text });
+                clearAttachment();
+                appendUserMessage(displayText, img);
+                history.push({ role: 'user', content: userContent });
                 busy = true;
                 sendBtn.disabled = true;
                 const typing = appendTyping();
@@ -1702,7 +1874,7 @@
                     if (ctx) {
                         messages.push({
                             role: 'system',
-                            content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。每筆 case 開頭的 [#N] 是頁面上的列號,可在引用時使用。\n\n' + ctx
+                            content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。每筆 case 開頭的 [#N] 是頁面上的列號,可在引用時使用。\n\n若使用者上傳圖片,請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位(defectType / map / position / waferTrend / rootCause / parts 等)推測哪幾筆最可能相關,並依相關度由高到低列出,引用 [#N] 並說明判斷依據。\n\n' + ctx
                         });
                     }
                     messages.push(...history);
