@@ -512,7 +512,12 @@
             display: flex; align-items: center; justify-content: center;
             cursor: zoom-out;
         }
-        .img-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+        .img-overlay img {
+            width: 95vw;
+            height: 95vh;
+            object-fit: contain;
+            border-radius: 6px;
+        }
 
         /* Theme toggle */
         .usage-hint {
