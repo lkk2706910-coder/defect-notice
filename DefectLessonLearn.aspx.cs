@@ -4,25 +4,28 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Web;
 using System.Web.Script.Serialization;
 
 public partial class DefectLessonLearn : System.Web.UI.Page
 {
-    // File location relative to the .aspx page's own folder (NOT the /PoC app root).
-    // Resolved via Request.PhysicalPath so this works whether or not the folder
-    // is configured as an IIS Application of its own.
     private const string DataFileName = "App_Data\\defect_lessons.json";
+    private const string UsersFileName = "App_Data\\users.json";
 
-    // Lock object guarding the JSON file across concurrent requests.
-    // ASP.NET serves multiple requests in parallel threads but they share this
-    // AppDomain, so a static lock + atomic write is enough for one machine.
     private static readonly object _fileLock = new object();
+    private static readonly object _usersLock = new object();
 
     private string GetDataFilePath()
     {
         string pageDir = Path.GetDirectoryName(Request.PhysicalPath);
         return Path.Combine(pageDir, DataFileName);
+    }
+    private string GetUsersFilePath()
+    {
+        string pageDir = Path.GetDirectoryName(Request.PhysicalPath);
+        return Path.Combine(pageDir, UsersFileName);
     }
 
     protected void Page_Load(object sender, EventArgs e)
@@ -64,6 +67,10 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             else if (string.Equals(op, "chat", StringComparison.OrdinalIgnoreCase))
             {
                 HandleChat();
+            }
+            else if (string.Equals(op, "login", StringComparison.OrdinalIgnoreCase))
+            {
+                HandleLogin();
             }
             else
             {
@@ -294,6 +301,99 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             Response.StatusCode = status;
             Response.Write("{\"ok\":false,\"error\":\"" + JsonEscape(wex.Message) + "\",\"detail\":" + ser.Serialize(detail) + "}");
         }
+    }
+
+    // ---- Local-style edit-mode auth ----
+    // No tokens, no per-request enforcement: this endpoint just answers
+    // "is this username+password correct?" so the UI can lock/unlock its
+    // edit mode locally. Storage backend is App_Data\users.json with the
+    // same {name, salt, hash} shape the Python user_hash.py tool writes.
+    // Always returns HTTP 200 (never 401), so IIS Classic mode cannot
+    // tack a WWW-Authenticate header onto the response.
+    private void HandleLogin()
+    {
+        string body = ReadBody();
+        var ser = NewSerializer();
+        Dictionary<string, object> req;
+        try
+        {
+            req = ser.Deserialize<Dictionary<string, object>>(body) ?? new Dictionary<string, object>();
+        }
+        catch
+        {
+            Response.Write("{\"ok\":false,\"error\":\"invalid_json\"}");
+            return;
+        }
+        string name = req.ContainsKey("username") ? (req["username"] ?? "").ToString().Trim() : "";
+        string pwd  = req.ContainsKey("password") ? (req["password"] ?? "").ToString() : "";
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(pwd))
+        {
+            Response.Write("{\"ok\":false,\"error\":\"empty_fields\"}");
+            return;
+        }
+
+        var user = LoadUser(name);
+        bool ok = false;
+        if (user != null)
+        {
+            string salt = user.ContainsKey("salt") ? (user["salt"] ?? "").ToString() : "";
+            string expectedHash = user.ContainsKey("hash") ? (user["hash"] ?? "").ToString() : "";
+            string computed = Sha256B64(salt + pwd);
+            ok = !string.IsNullOrEmpty(expectedHash) && ConstantTimeEquals(expectedHash, computed);
+        }
+
+        if (ok)
+        {
+            Response.Write("{\"ok\":true,\"name\":\"" + JsonEscape(name) + "\"}");
+        }
+        else
+        {
+            Response.Write("{\"ok\":false,\"error\":\"bad_credentials\"}");
+        }
+    }
+
+    private IDictionary<string, object> LoadUser(string name)
+    {
+        string path = GetUsersFilePath();
+        if (!File.Exists(path)) return null;
+        var ser = NewSerializer();
+        Dictionary<string, object> doc;
+        lock (_usersLock)
+        {
+            string current = File.ReadAllText(path, Encoding.UTF8);
+            if (string.IsNullOrWhiteSpace(current)) return null;
+            try { doc = ser.Deserialize<Dictionary<string, object>>(current); }
+            catch { return null; }
+        }
+        if (doc == null) return null;
+        object usersObj;
+        if (!doc.TryGetValue("users", out usersObj) || !(usersObj is ArrayList)) return null;
+        foreach (var u in (ArrayList)usersObj)
+        {
+            var d = u as IDictionary<string, object>;
+            if (d == null) continue;
+            string n = d.ContainsKey("name") ? (d["name"] ?? "").ToString() : "";
+            if (string.Equals(n, name, StringComparison.OrdinalIgnoreCase)) return d;
+        }
+        return null;
+    }
+
+    private static string Sha256B64(string s)
+    {
+        using (var sha = SHA256.Create())
+        {
+            byte[] h = sha.ComputeHash(Encoding.UTF8.GetBytes(s));
+            return Convert.ToBase64String(h);
+        }
+    }
+
+    private static bool ConstantTimeEquals(string a, string b)
+    {
+        if (a == null || b == null) return false;
+        if (a.Length != b.Length) return false;
+        int diff = 0;
+        for (int i = 0; i < a.Length; i++) diff |= a[i] ^ b[i];
+        return diff == 0;
     }
 
     // ---- Helpers ----

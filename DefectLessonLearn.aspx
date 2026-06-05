@@ -606,8 +606,53 @@
         }
         .mode-toggle:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
         body.view-mode .mode-toggle { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
-        body.view-mode .mode-toggle-label::before { content: '唯讀中 (點此編輯)'; }
-        body:not(.view-mode) .mode-toggle-label::before { content: '編輯中 (點此鎖定)'; }
+        /* Label text is set by JS (updateModeToggleLabel) so it can include
+           the logged-in username dynamically. */
+        /* ---- Login modal ---- */
+        .login-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .login-overlay[hidden] { display: none; }
+        .login-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 22px 24px;
+            min-width: 320px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .login-card h3 { margin: 0 0 14px; color: var(--text); font-size: 16px; }
+        .login-card label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+        .login-card input[type="text"],
+        .login-card input[type="password"] {
+            width: 100%; box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+        }
+        .login-card input:focus { border-color: var(--accent); }
+        .login-card .err {
+            display: none;
+            margin-top: 10px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: var(--warn);
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            border-radius: 6px;
+        }
+        .login-card .err.show { display: block; }
+        .login-card .actions {
+            margin-top: 16px;
+            display: flex; gap: 8px; justify-content: flex-end;
+        }
         /* View-mode hides every UI that can mutate data */
         body.view-mode #btnAdd,
         body.view-mode #btnSave,
@@ -1026,6 +1071,23 @@
     </style>
 </head>
 <body>
+    <!-- Login modal shown when entering edit mode without a session. -->
+    <div id="loginOverlay" class="login-overlay" hidden>
+        <div class="login-card">
+            <h3>進入編輯模式</h3>
+            <form id="loginForm">
+                <label>使用者</label>
+                <input type="text" id="loginUser" autocomplete="username" required />
+                <label>密碼</label>
+                <input type="password" id="loginPwd" autocomplete="current-password" required />
+                <div class="err" id="loginErr"></div>
+                <div class="actions">
+                    <button type="button" id="loginCancel" class="btn">取消</button>
+                    <button type="submit" id="loginSubmit" class="btn btn-primary">登入</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="container">
         <div class="header">
             <h1>Defect Case Lesson Learn</h1>
@@ -1162,7 +1224,10 @@
             // Defaults to TRUE so first-time visitors can't accidentally edit
             // while browsing; persisted in localStorage so daily editors only
             // need to toggle once.
-            viewMode: (localStorage.getItem('defectLL.viewMode') !== '0')
+            // Edit mode also requires a fresh-tab login. So a tab that was last
+            // saved in edit mode but no longer has a login session starts in
+            // view mode and the user has to log in again.
+            viewMode: (localStorage.getItem('defectLL.viewMode') !== '0') || !sessionStorage.getItem('defectLL.authUser')
         };
         // Apply the initial body class before the first render so cells get
         // contenteditable set correctly the first time.
@@ -1889,26 +1954,117 @@
             try { localStorage.setItem('defect-lesson-theme', next); } catch (e) {}
         });
 
-        // ---- View / Edit mode ----
-        $('#modeToggle').addEventListener('click', () => {
-            // Warn before entering view mode while unsaved changes are pending,
-            // since the 儲存 button will be hidden the moment we switch.
-            if (!state.viewMode) {
-                const pending = state.dirtyIds.size + state.deletedIds.size;
-                if (pending > 0) {
-                    if (!confirm('還有 ' + pending + ' 筆未儲存的變更。\n進入唯讀模式會看不到儲存按鈕,變更仍會留在記憶體裡。要繼續嗎?')) return;
-                }
-            }
-            state.viewMode = !state.viewMode;
-            document.body.classList.toggle('view-mode', state.viewMode);
-            try { localStorage.setItem('defectLL.viewMode', state.viewMode ? '1' : '0'); } catch (e) {}
-            // Drop any half-armed paste/image-cell state so a stale Ctrl-V
-            // can't slip past the new mode.
+        // ---- Local-style auth (no token, server only validates on login) ----
+        function getAuthUser() {
+            try { return sessionStorage.getItem('defectLL.authUser') || ''; } catch (e) { return ''; }
+        }
+        function setAuthUser(name) {
+            try { sessionStorage.setItem('defectLL.authUser', name); } catch (e) {}
+            updateModeToggleLabel();
+        }
+        function updateModeToggleLabel() {
+            const el = document.querySelector('#modeToggle .mode-toggle-label');
+            if (!el) return;
+            const u = getAuthUser();
             if (state.viewMode) {
-                state.pendingImageCell = null;
-                clearPasteHighlight();
+                el.textContent = u ? ('唯讀中 — ' + u + ' (點此編輯)') : '唯讀中 (點此編輯)';
+            } else {
+                el.textContent = u ? ('編輯中: ' + u + ' (點此鎖定)') : '編輯中 (點此鎖定)';
             }
+        }
+
+        // ---- Login modal ----
+        const loginOverlay = document.getElementById('loginOverlay');
+        const loginForm = document.getElementById('loginForm');
+        const loginUserEl = document.getElementById('loginUser');
+        const loginPwdEl = document.getElementById('loginPwd');
+        const loginErr = document.getElementById('loginErr');
+        let pendingAfterLogin = null;
+        function openLogin(onSuccess) {
+            pendingAfterLogin = onSuccess || null;
+            loginErr.classList.remove('show');
+            loginErr.textContent = '';
+            loginUserEl.value = getAuthUser() || '';
+            loginPwdEl.value = '';
+            loginOverlay.hidden = false;
+            setTimeout(() => (loginUserEl.value ? loginPwdEl : loginUserEl).focus(), 0);
+        }
+        function closeLogin() {
+            loginOverlay.hidden = true;
+            pendingAfterLogin = null;
+        }
+        document.getElementById('loginCancel').addEventListener('click', closeLogin);
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginErr.classList.remove('show');
+            const username = loginUserEl.value.trim();
+            const password = loginPwdEl.value;
+            if (!username || !password) return;
+            const submitBtn = document.getElementById('loginSubmit');
+            submitBtn.disabled = true;
+            try {
+                const res = await fetch('DefectLessonLearn.aspx?op=login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    // Server keeps error codes ASCII-only (encoding-safe);
+                    // map to user-facing Chinese here.
+                    let msg;
+                    if (data.error === 'bad_credentials') msg = '帳號或密碼錯誤';
+                    else if (data.error === 'empty_fields') msg = '請輸入帳號與密碼';
+                    else msg = data.error || ('登入失敗 (' + res.status + ')');
+                    loginErr.textContent = msg;
+                    loginErr.classList.add('show');
+                    return;
+                }
+                setAuthUser(data.name || username);
+                const cb = pendingAfterLogin;
+                closeLogin();
+                if (cb) cb();
+            } catch (err) {
+                loginErr.textContent = '網路錯誤: ' + err.message;
+                loginErr.classList.add('show');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // ---- View / Edit mode ----
+        function enterEditMode() {
+            state.viewMode = false;
+            document.body.classList.remove('view-mode');
+            try { localStorage.setItem('defectLL.viewMode', '0'); } catch (e) {}
+            updateModeToggleLabel();
             renderAll();
+        }
+        function enterViewMode() {
+            state.viewMode = true;
+            document.body.classList.add('view-mode');
+            try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
+            state.pendingImageCell = null;
+            clearPasteHighlight();
+            updateModeToggleLabel();
+            renderAll();
+        }
+        $('#modeToggle').addEventListener('click', () => {
+            if (state.viewMode) {
+                // -> edit: require login
+                if (!getAuthUser()) {
+                    openLogin(() => enterEditMode());
+                    return;
+                }
+                enterEditMode();
+                return;
+            }
+            // -> view: warn if there are unsaved changes
+            const pending = state.dirtyIds.size + state.deletedIds.size;
+            if (pending > 0) {
+                if (!confirm('還有 ' + pending + ' 筆未儲存的變更。\n進入唯讀模式會看不到儲存按鈕,變更仍會留在記憶體裡。要繼續嗎?')) return;
+            }
+            enterViewMode();
         });
 
         // ---- Usage hint show/hide (remembered in localStorage) ----
@@ -2052,6 +2208,7 @@
                 state.dirtyIds.clear();
                 state.deletedIds.clear();
                 decorateHeaders();
+                updateModeToggleLabel();
                 renderAll();
             } catch (e) {
                 setStatus('載入失敗: ' + e.message, 'error');
