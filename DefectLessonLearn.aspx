@@ -131,6 +131,27 @@
         .status-pill.dirty { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); }
         .status-pill.saved { color: #34d399; }
         .status-pill.error { color: var(--danger); background: var(--warn-bg); border: 1px solid var(--warn-border); }
+        .last-edit {
+            font-size: 11px;
+            color: var(--muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .last-edit[hidden] { display: none; }
+        .last-edit .who { color: var(--text); font-weight: 600; }
+        .last-edit .when { color: var(--muted); }
+        .last-edit .ref-chip {
+            background: var(--chip);
+            color: var(--text);
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .last-edit .ref-chip:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
 
         .table-wrap {
             border: 1px solid var(--border);
@@ -1106,6 +1127,7 @@
                     <span class="theme-toggle-label"></span>
                 </button>
                 <span id="statusPill" class="status-pill">載入中...</span>
+                <span id="lastEdit" class="last-edit" hidden></span>
             </div>
         </div>
 
@@ -2138,7 +2160,10 @@
                     }
                     const res = await fetch('DefectLessonLearn.aspx?op=upsert', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                        headers: {
+                            'Content-Type': 'application/json; charset=utf-8',
+                            'X-Edit-User': getAuthUser() || ''
+                        },
                         body: JSON.stringify(c)
                     });
                     const data = await res.json();
@@ -2148,7 +2173,10 @@
                 // Deletes
                 for (const id of deletedIds) {
                     setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
-                    const res = await fetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), { method: 'POST' });
+                    const res = await fetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), {
+                        method: 'POST',
+                        headers: { 'X-Edit-User': getAuthUser() || '' }
+                    });
                     const data = await res.json();
                     if (!data || !data.ok) throw new Error('delete ' + id + ': ' + (data && data.error || res.status));
                     state.deletedIds.delete(id);
@@ -2183,7 +2211,63 @@
             });
             state.cases = [...localNew, ...merged];
             state.loadedIds = new Set(fromServer.map(c => c.id));
+            updateLastEditDisplay(data._meta);
             renderAll();
+        }
+
+        // Render the toolbar "last save" line from the server-stamped _meta.
+        // Maps case ids to current [#N] positions and makes them clickable so
+        // a reader can jump to whatever the previous save touched.
+        function updateLastEditDisplay(meta) {
+            const el = document.getElementById('lastEdit');
+            if (!el) return;
+            if (!meta || !meta.lastEditedAt) {
+                el.hidden = true;
+                el.innerHTML = '';
+                return;
+            }
+            const when = formatLocalTime(meta.lastEditedAt);
+            const who = meta.lastEditedBy || '(未知)';
+            const ids = Array.isArray(meta.lastEditedCaseIds) ? meta.lastEditedCaseIds : [];
+
+            // Build chips for any IDs that still exist in the table
+            const chips = [];
+            ids.forEach(id => {
+                const idx = state.cases.findIndex(c => c.id === id);
+                if (idx >= 0) chips.push({ n: idx + 1, id: id });
+            });
+
+            el.innerHTML = '';
+            el.appendChild(document.createTextNode('上次儲存: '));
+            const who_el = document.createElement('span');
+            who_el.className = 'who';
+            who_el.textContent = who;
+            el.appendChild(who_el);
+            const when_el = document.createElement('span');
+            when_el.className = 'when';
+            when_el.textContent = ' @ ' + when;
+            el.appendChild(when_el);
+            if (chips.length > 0) {
+                el.appendChild(document.createTextNode(' — 動了'));
+                chips.forEach(c => {
+                    const chip = document.createElement('span');
+                    chip.className = 'ref-chip';
+                    chip.textContent = '#' + c.n;
+                    chip.title = '點擊跳到此 case';
+                    chip.addEventListener('click', () => scrollToCaseByNumber(c.n));
+                    el.appendChild(chip);
+                });
+            } else if (ids.length > 0) {
+                el.appendChild(document.createTextNode(' — 動了 ' + ids.length + ' 筆 (已刪除)'));
+            }
+            el.hidden = false;
+        }
+        function formatLocalTime(iso) {
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return iso;
+            const pad = n => (n < 10 ? '0' + n : '' + n);
+            return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate())
+                 + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
         }
 
         window.addEventListener('beforeunload', (e) => {
@@ -2209,6 +2293,7 @@
                 state.deletedIds.clear();
                 decorateHeaders();
                 updateModeToggleLabel();
+                updateLastEditDisplay(data._meta);
                 renderAll();
             } catch (e) {
                 setStatus('載入失敗: ' + e.message, 'error');

@@ -111,10 +111,24 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             Response.Write("{\"ok\":false,\"error\":\"empty body\"}");
             return;
         }
+        // Parse so we can stamp meta even on whole-file replace.
+        var ser = NewSerializer();
+        Dictionary<string, object> doc;
+        try { doc = ser.Deserialize<Dictionary<string, object>>(body) ?? new Dictionary<string, object>(); }
+        catch { doc = new Dictionary<string, object>(); }
+        var allIds = new List<string>();
+        ArrayList allCases = GetCasesArray(doc);
+        foreach (var c in allCases)
+        {
+            var d = c as IDictionary<string, object>;
+            if (d != null && d.ContainsKey("id")) allIds.Add((d["id"] ?? "").ToString());
+        }
+        StampMeta(doc, ReadEditedBy(), allIds);
         lock (_fileLock)
         {
-            WriteAtomic(path, body);
+            WriteAtomicWithBackup(path, ser.Serialize(doc));
         }
+        AppendAuditLog(ReadEditedBy(), "whole_save", allIds, null);
         Response.Write("{\"ok\":true}");
     }
 
@@ -155,6 +169,9 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             return;
         }
 
+        string editedBy = ReadEditedBy();
+        IDictionary<string, object> prevSnapshot = null;
+
         lock (_fileLock)
         {
             Dictionary<string, object> doc = ReadDoc(path, ser);
@@ -165,6 +182,9 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             {
                 if (CaseIdEquals(cases[i], id))
                 {
+                    // Snapshot the OLD row before overwriting so the audit log
+                    // can carry the previous state (lets us undo a bad edit).
+                    prevSnapshot = cases[i] as IDictionary<string, object>;
                     cases[i] = incoming;
                     found = true;
                     break;
@@ -174,8 +194,12 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             {
                 cases.Insert(0, incoming);
             }
-            WriteAtomic(path, ser.Serialize(doc));
+            StampMeta(doc, editedBy, new List<string> { id });
+            WriteAtomicWithBackup(path, ser.Serialize(doc));
         }
+        var snaps = new List<IDictionary<string, object>>();
+        if (prevSnapshot != null) snaps.Add(prevSnapshot);
+        AppendAuditLog(editedBy, "upsert", new List<string> { id }, snaps);
         Response.Write("{\"ok\":true}");
     }
 
@@ -188,6 +212,8 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             Response.Write("{\"ok\":false,\"error\":\"missing id\"}");
             return;
         }
+        string editedBy = ReadEditedBy();
+        var deletedSnapshots = new List<IDictionary<string, object>>();
         var ser = NewSerializer();
         lock (_fileLock)
         {
@@ -202,11 +228,17 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             {
                 if (CaseIdEquals(cases[i], id))
                 {
+                    // Keep the deleted row in the audit log so it can be
+                    // restored if the delete was accidental.
+                    var d = cases[i] as IDictionary<string, object>;
+                    if (d != null) deletedSnapshots.Add(d);
                     cases.RemoveAt(i);
                 }
             }
-            WriteAtomic(path, ser.Serialize(doc));
+            StampMeta(doc, editedBy, new List<string> { id });
+            WriteAtomicWithBackup(path, ser.Serialize(doc));
         }
+        AppendAuditLog(editedBy, "delete", new List<string> { id }, deletedSnapshots);
         Response.Write("{\"ok\":true}");
     }
 
@@ -446,6 +478,78 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         File.WriteAllText(tmp, content, new System.Text.UTF8Encoding(false));
         if (File.Exists(path)) File.Delete(path);
         File.Move(tmp, path);
+    }
+
+    // ---- Last-edit metadata + backup + audit log ----
+    // The client tells us who is saving via X-Edit-User; empty when missing.
+    private string ReadEditedBy()
+    {
+        string raw = Request.Headers["X-Edit-User"];
+        if (raw == null) return "";
+        return raw.Trim();
+    }
+
+    // Stamp the doc with "who last touched it and what they touched", so the
+    // UI can display it without a separate API call.
+    private static void StampMeta(Dictionary<string, object> doc, string editedBy, IList<string> affectedIds)
+    {
+        var meta = new Dictionary<string, object>();
+        meta["lastEditedAt"] = DateTime.UtcNow.ToString("o"); // ISO 8601 / RFC3339
+        meta["lastEditedBy"] = editedBy ?? "";
+        var arr = new ArrayList();
+        if (affectedIds != null) foreach (var id in affectedIds) arr.Add(id);
+        meta["lastEditedCaseIds"] = arr;
+        doc["_meta"] = meta;
+    }
+
+    // Atomic write to main, then mirror the same content to App_Data\backup
+    // so a corrupt App_Data folder is not the only copy of the data.
+    private void WriteAtomicWithBackup(string path, string content)
+    {
+        WriteAtomic(path, content);
+        try
+        {
+            string backupDir = Path.Combine(Path.GetDirectoryName(path), "backup");
+            if (!Directory.Exists(backupDir)) Directory.CreateDirectory(backupDir);
+            WriteAtomic(Path.Combine(backupDir, "defect_lesson_backup.json"), content);
+        }
+        catch { /* backup failure must not block the main save */ }
+    }
+
+    // Append-only audit trail in App_Data\backup\edit_history.jsonl
+    // One JSON object per line: {at, by, op, ids, snapshots?}.
+    // 'snapshots' carries the BEFORE state for upsert (so an edit can be
+    // reverted) and the full deleted case body for delete (so it can be
+    // restored). Both intentionally omitted for "whole_save" to keep the
+    // log small; the rolling backup file covers that case.
+    private static readonly object _logLock = new object();
+    private void AppendAuditLog(string by, string op, IList<string> ids, IList<IDictionary<string, object>> snapshots)
+    {
+        try
+        {
+            string logDir = Path.Combine(Path.GetDirectoryName(GetDataFilePath()), "backup");
+            var entry = new Dictionary<string, object>();
+            entry["at"] = DateTime.UtcNow.ToString("o");
+            entry["by"] = by ?? "";
+            entry["op"] = op;
+            var idArr = new ArrayList();
+            if (ids != null) foreach (var id in ids) idArr.Add(id);
+            entry["ids"] = idArr;
+            if (snapshots != null && snapshots.Count > 0)
+            {
+                var snapArr = new ArrayList();
+                foreach (var s in snapshots) snapArr.Add(s);
+                entry["snapshots"] = snapArr;
+            }
+            string line = NewSerializer().Serialize(entry) + "\n";
+            lock (_logLock)
+            {
+                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
+                File.AppendAllText(Path.Combine(logDir, "edit_history.jsonl"),
+                    line, new System.Text.UTF8Encoding(false));
+            }
+        }
+        catch { /* audit failure must not block the main save */ }
     }
 
     private static string JsonEscape(string s)
