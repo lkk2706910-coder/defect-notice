@@ -973,6 +973,56 @@
             max-width: 90%;
             text-align: center;
         }
+        /* AI-suggested new-case preview card */
+        .ai-newcase-card {
+            align-self: stretch;
+            background: var(--panel-elevated);
+            border: 1px solid var(--accent);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: var(--text);
+        }
+        .ai-newcase-title {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        .ai-newcase-fields {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-bottom: 10px;
+            max-height: 240px;
+            overflow-y: auto;
+            background: var(--input-bg);
+            border-radius: 6px;
+            padding: 6px 8px;
+        }
+        .ai-newcase-fields > div { line-height: 1.45; word-break: break-word; }
+        .ai-newcase-key {
+            color: var(--muted);
+            font-weight: 500;
+            margin-right: 6px;
+            display: inline-block;
+            min-width: 90px;
+        }
+        .ai-newcase-actions { display: flex; gap: 6px; }
+        .ai-newcase-add, .ai-newcase-dismiss {
+            flex: 1;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            border: 1px solid var(--border);
+            font-weight: 500;
+        }
+        .ai-newcase-add { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .ai-newcase-add:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+        .ai-newcase-add:disabled { background: var(--tint-med); color: var(--muted); cursor: default; border-color: var(--border); }
+        .ai-newcase-dismiss { background: transparent; color: var(--muted); }
+        .ai-newcase-dismiss:hover { color: var(--text); background: var(--tint-med); }
     </style>
 </head>
 <body>
@@ -2274,14 +2324,110 @@
             function appendMessage(role, text, cls) {
                 const div = document.createElement('div');
                 div.className = 'ai-msg ' + (cls || role);
-                div.textContent = text;
+                // For assistant replies: hide raw <new-case> JSON from the bubble
+                // and render an inline preview card instead.
+                let display = text;
+                if (role === 'assistant' && !cls) {
+                    display = text.replace(/<new-case>[\s\S]*?<\/new-case>/gi, '').trim();
+                    if (!display) display = '(已建議新增 case,請看下方卡片)';
+                }
+                div.textContent = display;
                 msgs.appendChild(div);
-                // For assistant replies: detect [#N] references and offer one-click filter.
                 if (role === 'assistant' && !cls) {
                     appendCaseRefsToolbar(text);
+                    extractNewCases(text).forEach(obj => appendNewCaseCard(obj));
                 }
                 msgs.scrollTop = msgs.scrollHeight;
                 return div;
+            }
+            // Parse <new-case>{...}</new-case> blocks the assistant inserts when
+            // the user asks to add a row. JSON inside; defensive on malformed.
+            function extractNewCases(text) {
+                const out = [];
+                const re = /<new-case>\s*([\s\S]*?)\s*<\/new-case>/gi;
+                let m;
+                while ((m = re.exec(text)) !== null) {
+                    try {
+                        const obj = JSON.parse(m[1]);
+                        if (obj && typeof obj === 'object' && !Array.isArray(obj)) out.push(obj);
+                    } catch (e) { /* malformed JSON — skip silently */ }
+                }
+                return out;
+            }
+            // Render a "preview + 加入" card for one AI-suggested case.
+            function appendNewCaseCard(obj) {
+                const editableKeys = COLUMNS.filter(c => c.kind !== 'img').map(c => c.key);
+                const card = document.createElement('div');
+                card.className = 'ai-newcase-card';
+                const title = document.createElement('div');
+                title.className = 'ai-newcase-title';
+                title.textContent = 'AI 建議新增 case';
+                card.appendChild(title);
+
+                const fields = document.createElement('div');
+                fields.className = 'ai-newcase-fields';
+                let any = false;
+                editableKeys.forEach(k => {
+                    const v = obj[k];
+                    if (v === undefined || v === null || v === '') return;
+                    any = true;
+                    const row = document.createElement('div');
+                    const key = document.createElement('span');
+                    key.className = 'ai-newcase-key';
+                    key.textContent = k + ':';
+                    row.appendChild(key);
+                    row.appendChild(document.createTextNode(String(v)));
+                    fields.appendChild(row);
+                });
+                if (!any) {
+                    const row = document.createElement('div');
+                    row.style.color = 'var(--muted)';
+                    row.textContent = '(AI 給的欄位都是空的)';
+                    fields.appendChild(row);
+                }
+                card.appendChild(fields);
+
+                const actions = document.createElement('div');
+                actions.className = 'ai-newcase-actions';
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'ai-newcase-add';
+                addBtn.textContent = state.viewMode ? '切到編輯並加入' : '加入表格';
+                const dismissBtn = document.createElement('button');
+                dismissBtn.type = 'button';
+                dismissBtn.className = 'ai-newcase-dismiss';
+                dismissBtn.textContent = '忽略';
+                actions.appendChild(addBtn);
+                actions.appendChild(dismissBtn);
+                card.appendChild(actions);
+
+                addBtn.addEventListener('click', () => {
+                    // Flip to edit mode if needed so the save button is reachable.
+                    if (state.viewMode) {
+                        state.viewMode = false;
+                        document.body.classList.remove('view-mode');
+                        try { localStorage.setItem('defectLL.viewMode', '0'); } catch (e) {}
+                    }
+                    const c = { id: uid() };
+                    editableKeys.forEach(k => {
+                        c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
+                    });
+                    state.cases.unshift(c);
+                    state.dirtyIds.add(c.id);
+                    state.dirty = true;
+                    // Clear filters so the new row is actually visible at the top.
+                    state.filters = {};
+                    document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
+                    renderAll();
+                    setStatus('已加入 1 筆 (記得按儲存)', 'dirty');
+                    addBtn.textContent = '✓ 已加入,記得按儲存';
+                    addBtn.disabled = true;
+                    dismissBtn.style.display = 'none';
+                });
+                dismissBtn.addEventListener('click', () => card.remove());
+
+                msgs.appendChild(card);
+                msgs.scrollTop = msgs.scrollHeight;
             }
             // Extract unique [#N] mentions (only valid indices 1..state.cases.length).
             function extractCaseRefs(text) {
@@ -2575,7 +2721,7 @@
                     if (ctx) {
                         messages.push({
                             role: 'system',
-                            content: '以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。\n\n【重要格式規定】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。\n\n若使用者上傳圖片,請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位(defectType / map / position / waferTrend / rootCause / parts 等)推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
+                            content: '今天日期: ' + (new Date().toISOString().slice(0,10).replace(/-/g, '/')) + '\n\n以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。\n\n【格式規定 1 - 引用】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。\n\n【格式規定 2 - 新增 case】若使用者要新增 case(關鍵字:「幫我新增」、「加一筆」、「記錄一下」、「請建立」等),除了一般回應外,**請額外**用以下標記夾一段 JSON,讓使用者可以一鍵加入表格:\n\n<new-case>\n{\n  "date": "yyyy/m/d",\n  "category": "...",\n  "defectType": "...",\n  "rootCause": "...",\n  "parts": "...",\n  "equipment": "...",\n  "position": "..."\n}\n</new-case>\n\n可用的欄位 key(嚴格使用以下英文拼寫,不知道的請省略不要編造):\n- date, category, link, parts, rootCause, entityRecipe, equipment, impact, generation, productModel, defectType, map, edx, waferTrend, position, other\n\n可以放多個 <new-case>...</new-case> 區塊(每塊一筆),代表多筆建議。\n\n【若使用者上傳圖片】請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
                         });
                     }
                     // dHash-detected near-duplicates: tell the LLM in a SEPARATE
