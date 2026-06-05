@@ -2068,6 +2068,9 @@
             try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
             state.pendingImageCell = null;
             clearPasteHighlight();
+            // Locking always logs the user out — next "進入編輯" requires the
+            // login modal again. Matches the "鎖一次就要重輸帳密" requirement.
+            try { sessionStorage.removeItem('defectLL.authUser'); } catch (e) {}
             updateModeToggleLabel();
             renderAll();
         }
