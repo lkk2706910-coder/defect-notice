@@ -729,8 +729,8 @@
             position: fixed;
             right: 22px;
             bottom: 90px;
-            width: 560px;
-            height: 580px;
+            width: 800px;
+            height: 760px;
             max-width: calc(100vw - 44px);
             max-height: calc(100vh - 120px);
             background: var(--panel);
