@@ -19,7 +19,8 @@
     </script>
     <title>Defect Case Lesson Learn</title>
     <style>
-        :root, [data-theme="dark"] {
+        :root {
+            color-scheme: dark;
             --bg: #0b1220;
             --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #152a52 0%, #0b1220 60%);
             --panel: #0f1b33;
@@ -43,7 +44,33 @@
             --danger: #fca5a5;
             --link: #6cb6ff;
         }
-        [data-theme="light"] {
+        html[data-theme="dark"] {
+            color-scheme: dark;
+            --bg: #0b1220;
+            --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #152a52 0%, #0b1220 60%);
+            --panel: #0f1b33;
+            --panel-elevated: #14233f;
+            --text: #e7eefc;
+            --muted: #a9b7d6;
+            --border: rgba(255,255,255,0.12);
+            --row-hover: rgba(99,179,237,0.10);
+            --chip: rgba(99,179,237,0.18);
+            --chip-active-bg: rgba(99,179,237,0.22);
+            --chip-active-border: rgba(99,179,237,0.55);
+            --accent: #63b3ed;
+            --accent-strong: #2563eb;
+            --tint-low: rgba(255,255,255,0.03);
+            --tint-med: rgba(255,255,255,0.06);
+            --tint-high: rgba(255,255,255,0.10);
+            --input-bg: rgba(5,10,20,0.30);
+            --warn: #fbbf24;
+            --warn-bg: rgba(251,191,36,0.10);
+            --warn-border: rgba(251,191,36,0.40);
+            --danger: #fca5a5;
+            --link: #6cb6ff;
+        }
+        html[data-theme="light"] {
+            color-scheme: light;
             --bg: #f4f6fb;
             --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #e8efff 0%, #f4f6fb 60%);
             --panel: #ffffff;
