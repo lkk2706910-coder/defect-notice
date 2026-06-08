@@ -25,8 +25,8 @@
             --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #152a52 0%, #0b1220 60%);
             --panel: #0f1b33;
             --panel-elevated: #14233f;
-            --text: #e7eefc;
-            --muted: #a9b7d6;
+            --text: #f3f7ff;
+            --muted: #c6d0e6;
             --border: rgba(255,255,255,0.12);
             --row-hover: rgba(99,179,237,0.10);
             --chip: rgba(99,179,237,0.18);
@@ -50,8 +50,8 @@
             --bg-gradient: radial-gradient(1200px 600px at 20% 0%, #152a52 0%, #0b1220 60%);
             --panel: #0f1b33;
             --panel-elevated: #14233f;
-            --text: #e7eefc;
-            --muted: #a9b7d6;
+            --text: #f3f7ff;
+            --muted: #c6d0e6;
             --border: rgba(255,255,255,0.12);
             --row-hover: rgba(99,179,237,0.10);
             --chip: rgba(99,179,237,0.18);
@@ -101,7 +101,6 @@
             background: var(--bg-gradient);
             color: var(--text);
             min-height: 100vh;
-            transition: background .3s, color .3s;
         }
         .container { max-width: 100%; padding: 16px 20px; }
         .header {
@@ -197,6 +196,10 @@
             padding: 6px 8px;
             vertical-align: top;
             text-align: left;
+            /* Set color explicitly so cell text doesn't rely on inheritance
+               from <body> — some Chromium versions don't recompute the
+               inherited CSS var on a [data-theme] flip until next layout. */
+            color: var(--text);
         }
         table.cases thead th {
             position: sticky; top: 0;
