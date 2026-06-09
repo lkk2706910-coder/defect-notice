@@ -2677,27 +2677,34 @@
                 card.appendChild(actions);
 
                 addBtn.addEventListener('click', () => {
-                    // Flip to edit mode if needed so the save button is reachable.
-                    if (state.viewMode) {
-                        state.viewMode = false;
-                        document.body.classList.remove('view-mode');
-                        try { localStorage.setItem('defectLL.viewMode', '0'); } catch (e) {}
+                    // Same login gate as the toolbar 編輯 toggle: clicking 加入
+                    // while in view mode must prompt for credentials first, then
+                    // run the actual insert via this same callback.
+                    const doAdd = () => {
+                        if (state.viewMode) {
+                            enterEditMode();
+                        }
+                        const c = { id: uid() };
+                        editableKeys.forEach(k => {
+                            c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
+                        });
+                        state.cases.unshift(c);
+                        state.dirtyIds.add(c.id);
+                        state.dirty = true;
+                        // Clear filters so the new row is actually visible at the top.
+                        state.filters = {};
+                        document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
+                        renderAll();
+                        setStatus('已加入 1 筆 (記得按儲存)', 'dirty');
+                        addBtn.textContent = '✓ 已加入,記得按儲存';
+                        addBtn.disabled = true;
+                        dismissBtn.style.display = 'none';
+                    };
+                    if (state.viewMode && !getAuthUser()) {
+                        openLogin(doAdd);
+                        return;
                     }
-                    const c = { id: uid() };
-                    editableKeys.forEach(k => {
-                        c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
-                    });
-                    state.cases.unshift(c);
-                    state.dirtyIds.add(c.id);
-                    state.dirty = true;
-                    // Clear filters so the new row is actually visible at the top.
-                    state.filters = {};
-                    document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
-                    renderAll();
-                    setStatus('已加入 1 筆 (記得按儲存)', 'dirty');
-                    addBtn.textContent = '✓ 已加入,記得按儲存';
-                    addBtn.disabled = true;
-                    dismissBtn.style.display = 'none';
+                    doAdd();
                 });
                 dismissBtn.addEventListener('click', () => card.remove());
 
