@@ -657,6 +657,18 @@
         }
         .mode-toggle:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
         body.view-mode .mode-toggle { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
+        .btn-logout {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--tint-med);
+            color: var(--muted);
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .btn-logout:hover { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+        .btn-logout[hidden] { display: none; }
         /* Label text is set by JS (updateModeToggleLabel) so it can include
            the logged-in username dynamically. */
         /* ---- Login modal ---- */
@@ -1152,6 +1164,7 @@
                 <button type="button" id="modeToggle" class="mode-toggle" title="切換唯讀 / 編輯模式">
                     <span class="mode-toggle-label"></span>
                 </button>
+                <button type="button" id="btnLogout" class="btn-logout" title="登出" hidden>登出</button>
                 <button type="button" id="themeToggle" class="theme-toggle" title="切換深色 / 淺色">
                     <span class="theme-toggle-icon"></span>
                     <span class="theme-toggle-label"></span>
@@ -2013,6 +2026,7 @@
         function setAuthUser(name) {
             try { sessionStorage.setItem('defectLL.authUser', name); } catch (e) {}
             updateModeToggleLabel();
+            resetIdleTimer();
         }
         function updateModeToggleLabel() {
             const el = document.querySelector('#modeToggle .mode-toggle-label');
@@ -2023,7 +2037,72 @@
             } else {
                 el.textContent = u ? ('編輯中: ' + u + ' (點此鎖定)') : '編輯中 (點此鎖定)';
             }
+            // Logout button is visible only while a user is logged in.
+            const lo = document.getElementById('btnLogout');
+            if (lo) lo.hidden = !u;
         }
+
+        // ---- Logout (manual button + 5-min idle auto) ----
+        function performLogout(reason) {
+            try { sessionStorage.removeItem('defectLL.authUser'); } catch (e) {}
+            // Force back into view mode and drop any in-flight UI state.
+            state.viewMode = true;
+            document.body.classList.add('view-mode');
+            try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
+            state.pendingImageCell = null;
+            clearPasteHighlight();
+            // Wipe the in-memory cases so a closed session can't be peeked
+            // at via dev tools after logout. Reload happens on next login.
+            state.cases = [];
+            state.loadedIds = new Set();
+            state.dirtyIds.clear();
+            state.deletedIds.clear();
+            state.aiFilterIds = null;
+            renderAll();
+            updateModeToggleLabel();
+            if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+            if (reason) setStatus(reason, 'dirty');
+            // Drop straight back into the required-login gate.
+            openLogin(() => loadData(), { required: true });
+        }
+        document.getElementById('btnLogout').addEventListener('click', () => {
+            if (state.dirtyIds.size + state.deletedIds.size > 0) {
+                if (!confirm('還有未儲存的變更,確定要登出?')) return;
+            }
+            performLogout('已登出');
+        });
+
+        // ---- 5-minute inactivity auto-logout ----
+        const IDLE_MS = 5 * 60 * 1000;
+        let idleTimer = null;
+        let lastActivityAt = 0;
+        function resetIdleTimer() {
+            if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+            if (!getAuthUser()) return; // no point counting idle while logged out
+            idleTimer = setTimeout(() => {
+                // If they have unsaved changes, give them ONE chance to extend.
+                if (state.dirtyIds.size + state.deletedIds.size > 0) {
+                    if (confirm('閒置 5 分鐘,即將自動登出。\n還有未儲存的變更 — 取消可延長 5 分鐘讓你儲存。')) {
+                        // confirm() returns true on OK -> proceed with logout
+                    } else {
+                        resetIdleTimer();
+                        return;
+                    }
+                }
+                performLogout('閒置 5 分鐘,已自動登出');
+            }, IDLE_MS);
+        }
+        function onUserActivity() {
+            // Throttle to once per second — mousemove fires thousands of times
+            // and we don't need that frequency for "is the user still here".
+            const now = Date.now();
+            if (now - lastActivityAt < 1000) return;
+            lastActivityAt = now;
+            resetIdleTimer();
+        }
+        ['mousemove', 'mousedown', 'keydown', 'click', 'scroll', 'touchstart', 'wheel'].forEach(ev => {
+            window.addEventListener(ev, onUserActivity, { passive: true });
+        });
 
         // ---- Login modal ----
         const loginOverlay = document.getElementById('loginOverlay');
@@ -2348,6 +2427,8 @@
         (function bootGate() {
             if (getAuthUser()) {
                 loadData();
+                resetIdleTimer();
+                updateModeToggleLabel();
                 return;
             }
             setStatus('需要登入');
