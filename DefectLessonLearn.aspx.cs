@@ -64,29 +64,24 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             }
             else if (string.Equals(op, "list", StringComparison.OrdinalIgnoreCase))
             {
-                if (!RequireAuth()) return;
-                HandleList(path);
+                if (RequireAuth()) HandleList(path);
             }
             else if (string.Equals(op, "save", StringComparison.OrdinalIgnoreCase))
             {
-                if (!RequireAuth()) return;
                 // Legacy whole-file replace (still works; clobbers concurrent edits)
-                HandleSave(path, dir);
+                if (RequireAuth()) HandleSave(path, dir);
             }
             else if (string.Equals(op, "upsert", StringComparison.OrdinalIgnoreCase))
             {
-                if (!RequireAuth()) return;
-                HandleUpsert(path, dir);
+                if (RequireAuth()) HandleUpsert(path, dir);
             }
             else if (string.Equals(op, "delete", StringComparison.OrdinalIgnoreCase))
             {
-                if (!RequireAuth()) return;
-                HandleDelete(path);
+                if (RequireAuth()) HandleDelete(path);
             }
             else if (string.Equals(op, "chat", StringComparison.OrdinalIgnoreCase))
             {
-                if (!RequireAuth()) return;
-                HandleChat();
+                if (RequireAuth()) HandleChat();
             }
             else
             {
