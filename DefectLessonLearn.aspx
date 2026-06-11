@@ -2023,10 +2023,35 @@
         function getAuthUser() {
             try { return sessionStorage.getItem('defectLL.authUser') || ''; } catch (e) { return ''; }
         }
-        function setAuthUser(name) {
-            try { sessionStorage.setItem('defectLL.authUser', name); } catch (e) {}
+        function getAuthToken() {
+            try { return sessionStorage.getItem('defectLL.authToken') || ''; } catch (e) { return ''; }
+        }
+        function setAuthUser(name, token) {
+            try {
+                sessionStorage.setItem('defectLL.authUser', name);
+                if (token) sessionStorage.setItem('defectLL.authToken', token);
+            } catch (e) {}
             updateModeToggleLabel();
             resetIdleTimer();
+        }
+        // Wraps fetch: auto-attaches X-Auth-Token, and on any
+        //   { ok: false, error: "needLogin" }
+        // body (sent by RequireAuth on the server when the token is missing,
+        // expired or unknown) immediately tears the session down and pops
+        // the login modal.
+        async function authFetch(url, opts) {
+            opts = opts || {};
+            const headers = Object.assign({}, opts.headers || {});
+            const tok = getAuthToken();
+            if (tok) headers['X-Auth-Token'] = tok;
+            const res = await fetch(url, Object.assign({}, opts, { headers: headers }));
+            try {
+                const peek = await res.clone().json();
+                if (peek && peek.ok === false && peek.error === 'needLogin') {
+                    performLogout('登入逾期,請重新登入');
+                }
+            } catch (e) { /* not JSON; ignore */ }
+            return res;
         }
         function updateModeToggleLabel() {
             const el = document.querySelector('#modeToggle .mode-toggle-label');
@@ -2044,7 +2069,10 @@
 
         // ---- Logout (manual button + 5-min idle auto) ----
         function performLogout(reason) {
-            try { sessionStorage.removeItem('defectLL.authUser'); } catch (e) {}
+            try {
+                sessionStorage.removeItem('defectLL.authUser');
+                sessionStorage.removeItem('defectLL.authToken');
+            } catch (e) {}
             // Force back into view mode and drop any in-flight UI state.
             state.viewMode = true;
             document.body.classList.add('view-mode');
@@ -2159,7 +2187,7 @@
                     loginErr.classList.add('show');
                     return;
                 }
-                setAuthUser(data.name || username);
+                setAuthUser(data.name || username, data.token);
                 const cb = pendingAfterLogin;
                 closeLogin();
                 if (cb) cb();
@@ -2279,11 +2307,10 @@
                         state.dirtyIds.delete(id);
                         continue;
                     }
-                    const res = await fetch('DefectLessonLearn.aspx?op=upsert', {
+                    const res = await authFetch('DefectLessonLearn.aspx?op=upsert', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json; charset=utf-8',
-                            'X-Edit-User': getAuthUser() || ''
+                            'Content-Type': 'application/json; charset=utf-8'
                         },
                         body: JSON.stringify(c)
                     });
@@ -2294,9 +2321,8 @@
                 // Deletes
                 for (const id of deletedIds) {
                     setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
-                    const res = await fetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), {
-                        method: 'POST',
-                        headers: { 'X-Edit-User': getAuthUser() || '' }
+                    const res = await authFetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), {
+                        method: 'POST'
                     });
                     const data = await res.json();
                     if (!data || !data.ok) throw new Error('delete ' + id + ': ' + (data && data.error || res.status));
@@ -2312,7 +2338,7 @@
 
         async function reloadFromServer(opts) {
             opts = opts || {};
-            const res = await fetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
+            const res = await authFetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
             const data = await res.json();
             const fromServer = Array.isArray(data.cases) ? data.cases : [];
             fromServer.forEach(c => { if (!c.id) c.id = uid(); });
@@ -2407,7 +2433,7 @@
         async function loadData() {
             setStatus('載入中...');
             try {
-                const res = await fetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
+                const res = await authFetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
                 const data = await res.json();
                 state.cases = Array.isArray(data.cases) ? data.cases : [];
                 // ensure each has an id
@@ -3122,7 +3148,7 @@
                         });
                     }
                     messages.push(...s.history);
-                    const res = await fetch('DefectLessonLearn.aspx?op=chat', {
+                    const res = await authFetch('DefectLessonLearn.aspx?op=chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json; charset=utf-8' },
                         body: JSON.stringify({ messages: messages })

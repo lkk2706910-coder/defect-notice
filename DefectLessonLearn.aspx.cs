@@ -17,6 +17,16 @@ public partial class DefectLessonLearn : System.Web.UI.Page
     private static readonly object _fileLock = new object();
     private static readonly object _usersLock = new object();
 
+    // Auth tokens issued by HandleLogin live here. Sliding 8-hour expiry,
+    // GC'd whenever a new login happens so the dictionary never grows
+    // without bound. Always returning HTTP 200 from RequireAuth keeps
+    // IIS Classic from tacking on WWW-Authenticate.
+    private class TokenInfo { public string Name; public DateTime ExpiresAt; }
+    private static readonly object _tokenLock = new object();
+    private static readonly Dictionary<string, TokenInfo> _tokens =
+        new Dictionary<string, TokenInfo>(StringComparer.Ordinal);
+    private const int TokenLifetimeHours = 8;
+
     private string GetDataFilePath()
     {
         string pageDir = Path.GetDirectoryName(Request.PhysicalPath);
@@ -47,30 +57,36 @@ public partial class DefectLessonLearn : System.Web.UI.Page
 
         try
         {
-            if (string.Equals(op, "list", StringComparison.OrdinalIgnoreCase))
+            // Login is the only op that never requires a prior token.
+            if (string.Equals(op, "login", StringComparison.OrdinalIgnoreCase))
             {
+                HandleLogin();
+            }
+            else if (string.Equals(op, "list", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!RequireAuth()) return;
                 HandleList(path);
             }
             else if (string.Equals(op, "save", StringComparison.OrdinalIgnoreCase))
             {
+                if (!RequireAuth()) return;
                 // Legacy whole-file replace (still works; clobbers concurrent edits)
                 HandleSave(path, dir);
             }
             else if (string.Equals(op, "upsert", StringComparison.OrdinalIgnoreCase))
             {
+                if (!RequireAuth()) return;
                 HandleUpsert(path, dir);
             }
             else if (string.Equals(op, "delete", StringComparison.OrdinalIgnoreCase))
             {
+                if (!RequireAuth()) return;
                 HandleDelete(path);
             }
             else if (string.Equals(op, "chat", StringComparison.OrdinalIgnoreCase))
             {
+                if (!RequireAuth()) return;
                 HandleChat();
-            }
-            else if (string.Equals(op, "login", StringComparison.OrdinalIgnoreCase))
-            {
-                HandleLogin();
             }
             else
             {
@@ -376,12 +392,68 @@ public partial class DefectLessonLearn : System.Web.UI.Page
 
         if (ok)
         {
-            Response.Write("{\"ok\":true,\"name\":\"" + JsonEscape(name) + "\"}");
+            string token = NewToken();
+            lock (_tokenLock)
+            {
+                // GC expired tokens on each successful login so the dict can't grow forever.
+                var now = DateTime.UtcNow;
+                var dead = new List<string>();
+                foreach (var kv in _tokens) if (kv.Value.ExpiresAt < now) dead.Add(kv.Key);
+                foreach (var k in dead) _tokens.Remove(k);
+
+                _tokens[token] = new TokenInfo { Name = name, ExpiresAt = now.AddHours(TokenLifetimeHours) };
+            }
+            Response.Write("{\"ok\":true,\"name\":\"" + JsonEscape(name) + "\",\"token\":\"" + JsonEscape(token) + "\"}");
         }
         else
         {
             Response.Write("{\"ok\":false,\"error\":\"bad_credentials\"}");
         }
+    }
+
+    // Gate for every protected op. Reads X-Auth-Token, looks it up in the
+    // in-memory token table, applies sliding expiry. Writes a 200 JSON
+    // failure (never 401) so IIS Classic mode does not invent a
+    // WWW-Authenticate challenge on our behalf.
+    private bool RequireAuth()
+    {
+        string token = Request.Headers["X-Auth-Token"];
+        if (string.IsNullOrEmpty(token))
+        {
+            Response.Write("{\"ok\":false,\"error\":\"needLogin\"}");
+            return false;
+        }
+        TokenInfo info;
+        lock (_tokenLock)
+        {
+            if (!_tokens.TryGetValue(token, out info))
+            {
+                Response.Write("{\"ok\":false,\"error\":\"needLogin\"}");
+                return false;
+            }
+            if (info.ExpiresAt < DateTime.UtcNow)
+            {
+                _tokens.Remove(token);
+                Response.Write("{\"ok\":false,\"error\":\"needLogin\"}");
+                return false;
+            }
+            // Sliding expiry: any successful request extends the session.
+            info.ExpiresAt = DateTime.UtcNow.AddHours(TokenLifetimeHours);
+        }
+        // Stash the username so audit logging downstream can pick it up
+        // without re-reading the header.
+        HttpContext.Current.Items["AuthUser"] = info.Name;
+        return true;
+    }
+
+    private static string NewToken()
+    {
+        byte[] buf = new byte[24];
+        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(buf);
+        }
+        return Convert.ToBase64String(buf).Replace("/", "_").Replace("+", "-").Replace("=", "");
     }
 
     private IDictionary<string, object> LoadUser(string name)
@@ -481,9 +553,14 @@ public partial class DefectLessonLearn : System.Web.UI.Page
     }
 
     // ---- Last-edit metadata + backup + audit log ----
-    // The client tells us who is saving via X-Edit-User; empty when missing.
+    // Prefer the username pulled from the auth token (set by RequireAuth on
+    // Items["AuthUser"]) so an audit entry can't be spoofed via a forged
+    // X-Edit-User header. Falls back to the header only when no token was
+    // checked (legacy / direct save path).
     private string ReadEditedBy()
     {
+        object cached = HttpContext.Current.Items["AuthUser"];
+        if (cached != null && !string.IsNullOrEmpty(cached.ToString())) return cached.ToString();
         string raw = Request.Headers["X-Edit-User"];
         if (raw == null) return "";
         return raw.Trim();
