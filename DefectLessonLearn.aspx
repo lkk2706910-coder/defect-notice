@@ -2026,13 +2026,31 @@
         function getAuthToken() {
             try { return sessionStorage.getItem('defectLL.authToken') || ''; } catch (e) { return ''; }
         }
-        function setAuthUser(name, token) {
+        function getAuthRole() {
+            try { return sessionStorage.getItem('defectLL.authRole') || 'editor'; } catch (e) { return 'editor'; }
+        }
+        function isViewer() { return getAuthRole() !== 'editor'; }
+        function setAuthUser(name, token, role) {
             try {
                 sessionStorage.setItem('defectLL.authUser', name);
                 if (token) sessionStorage.setItem('defectLL.authToken', token);
+                sessionStorage.setItem('defectLL.authRole', role || 'editor');
             } catch (e) {}
             updateModeToggleLabel();
+            applyRoleVisibility();
             resetIdleTimer();
+        }
+        // Viewers must never see the edit toggle, can never leave view-mode,
+        // and the body keeps the view-mode class so all mutation UI stays
+        // hidden. Called whenever auth changes.
+        function applyRoleVisibility() {
+            const viewer = isViewer() && !!getAuthUser();
+            const toggle = document.getElementById('modeToggle');
+            if (toggle) toggle.style.display = viewer ? 'none' : '';
+            if (viewer) {
+                state.viewMode = true;
+                document.body.classList.add('view-mode');
+            }
         }
         // Wraps fetch: auto-attaches X-Auth-Token, and on any
         //   { ok: false, error: "needLogin" }
@@ -2072,6 +2090,7 @@
             try {
                 sessionStorage.removeItem('defectLL.authUser');
                 sessionStorage.removeItem('defectLL.authToken');
+                sessionStorage.removeItem('defectLL.authRole');
             } catch (e) {}
             // Force back into view mode and drop any in-flight UI state.
             state.viewMode = true;
@@ -2187,7 +2206,7 @@
                     loginErr.classList.add('show');
                     return;
                 }
-                setAuthUser(data.name || username, data.token);
+                setAuthUser(data.name || username, data.token, data.role);
                 const cb = pendingAfterLogin;
                 closeLogin();
                 if (cb) cb();
@@ -2315,7 +2334,10 @@
                         body: JSON.stringify(c)
                     });
                     const data = await res.json();
-                    if (!data || !data.ok) throw new Error('upsert ' + id + ': ' + (data && data.error || res.status));
+                    if (!data || !data.ok) {
+                        if (data && data.error === 'readonly') throw new Error('你的權限只能閱讀,無法儲存');
+                        throw new Error('upsert ' + id + ': ' + (data && data.error || res.status));
+                    }
                     state.dirtyIds.delete(id);
                 }
                 // Deletes
@@ -2325,7 +2347,10 @@
                         method: 'POST'
                     });
                     const data = await res.json();
-                    if (!data || !data.ok) throw new Error('delete ' + id + ': ' + (data && data.error || res.status));
+                    if (!data || !data.ok) {
+                        if (data && data.error === 'readonly') throw new Error('你的權限只能閱讀,無法儲存');
+                        throw new Error('delete ' + id + ': ' + (data && data.error || res.status));
+                    }
                     state.deletedIds.delete(id);
                 }
                 // Re-fetch so any changes made by OTHER users during our session are picked up
@@ -2455,6 +2480,7 @@
                 loadData();
                 resetIdleTimer();
                 updateModeToggleLabel();
+                applyRoleVisibility();
                 return;
             }
             setStatus('需要登入');
@@ -2795,7 +2821,12 @@
                 const addBtn = document.createElement('button');
                 addBtn.type = 'button';
                 addBtn.className = 'ai-newcase-add';
-                addBtn.textContent = state.viewMode ? '切到編輯並加入' : '加入表格';
+                if (isViewer()) {
+                    addBtn.textContent = '僅閱讀,無法加入';
+                    addBtn.disabled = true;
+                } else {
+                    addBtn.textContent = state.viewMode ? '切到編輯並加入' : '加入表格';
+                }
                 const dismissBtn = document.createElement('button');
                 dismissBtn.type = 'button';
                 dismissBtn.className = 'ai-newcase-dismiss';

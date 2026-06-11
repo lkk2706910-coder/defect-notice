@@ -21,7 +21,7 @@ public partial class DefectLessonLearn : System.Web.UI.Page
     // GC'd whenever a new login happens so the dictionary never grows
     // without bound. Always returning HTTP 200 from RequireAuth keeps
     // IIS Classic from tacking on WWW-Authenticate.
-    private class TokenInfo { public string Name; public DateTime ExpiresAt; }
+    private class TokenInfo { public string Name; public string Role; public DateTime ExpiresAt; }
     private static readonly object _tokenLock = new object();
     private static readonly Dictionary<string, TokenInfo> _tokens =
         new Dictionary<string, TokenInfo>(StringComparer.Ordinal);
@@ -69,15 +69,15 @@ public partial class DefectLessonLearn : System.Web.UI.Page
             else if (string.Equals(op, "save", StringComparison.OrdinalIgnoreCase))
             {
                 // Legacy whole-file replace (still works; clobbers concurrent edits)
-                if (RequireAuth()) HandleSave(path, dir);
+                if (RequireEditor()) HandleSave(path, dir);
             }
             else if (string.Equals(op, "upsert", StringComparison.OrdinalIgnoreCase))
             {
-                if (RequireAuth()) HandleUpsert(path, dir);
+                if (RequireEditor()) HandleUpsert(path, dir);
             }
             else if (string.Equals(op, "delete", StringComparison.OrdinalIgnoreCase))
             {
-                if (RequireAuth()) HandleDelete(path);
+                if (RequireEditor()) HandleDelete(path);
             }
             else if (string.Equals(op, "chat", StringComparison.OrdinalIgnoreCase))
             {
@@ -387,6 +387,15 @@ public partial class DefectLessonLearn : System.Web.UI.Page
 
         if (ok)
         {
+            // Default role is editor for users.json entries written before
+            // the role field existed, so existing accounts keep their old
+            // privileges. Explicit value must be "editor" or "viewer".
+            string role = "editor";
+            if (user.ContainsKey("role"))
+            {
+                string r = (user["role"] ?? "").ToString().Trim().ToLowerInvariant();
+                if (r == "viewer" || r == "editor") role = r;
+            }
             string token = NewToken();
             lock (_tokenLock)
             {
@@ -396,9 +405,9 @@ public partial class DefectLessonLearn : System.Web.UI.Page
                 foreach (var kv in _tokens) if (kv.Value.ExpiresAt < now) dead.Add(kv.Key);
                 foreach (var k in dead) _tokens.Remove(k);
 
-                _tokens[token] = new TokenInfo { Name = name, ExpiresAt = now.AddHours(TokenLifetimeHours) };
+                _tokens[token] = new TokenInfo { Name = name, Role = role, ExpiresAt = now.AddHours(TokenLifetimeHours) };
             }
-            Response.Write("{\"ok\":true,\"name\":\"" + JsonEscape(name) + "\",\"token\":\"" + JsonEscape(token) + "\"}");
+            Response.Write("{\"ok\":true,\"name\":\"" + JsonEscape(name) + "\",\"role\":\"" + role + "\",\"token\":\"" + JsonEscape(token) + "\"}");
         }
         else
         {
@@ -438,6 +447,21 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         // Stash the username so audit logging downstream can pick it up
         // without re-reading the header.
         HttpContext.Current.Items["AuthUser"] = info.Name;
+        HttpContext.Current.Items["AuthRole"] = info.Role ?? "editor";
+        return true;
+    }
+
+    // Gate for mutating ops. Viewer-role tokens are accepted by RequireAuth
+    // (they can read) but rejected here so they cannot mutate the table.
+    private bool RequireEditor()
+    {
+        if (!RequireAuth()) return false;
+        string role = (HttpContext.Current.Items["AuthRole"] ?? "editor").ToString();
+        if (role != "editor")
+        {
+            Response.Write("{\"ok\":false,\"error\":\"readonly\"}");
+            return false;
+        }
         return true;
     }
 

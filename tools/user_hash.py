@@ -37,9 +37,14 @@ def hash_password(salt: str, password: str) -> str:
     return base64.b64encode(digest).decode("ascii")
 
 
-def make_user_entry(username: str, password: str) -> dict:
+def make_user_entry(username: str, password: str, role: str = "editor") -> dict:
     salt = make_salt()
-    return {"name": username, "salt": salt, "hash": hash_password(salt, password)}
+    return {
+        "name": username,
+        "salt": salt,
+        "hash": hash_password(salt, password),
+        "role": role if role in ("editor", "viewer") else "editor",
+    }
 
 
 class App(tk.Tk):
@@ -69,9 +74,20 @@ class App(tk.Tk):
             outer, text="顯示密碼", variable=self.show_pwd, command=self._toggle_pwd
         ).grid(row=2, column=1, sticky="w")
 
+        ttk.Label(outer, text="權限").grid(row=3, column=0, sticky="w", pady=4)
+        role_row = ttk.Frame(outer)
+        role_row.grid(row=3, column=1, sticky="w", pady=4)
+        self.role_var = tk.StringVar(value="editor")
+        ttk.Radiobutton(
+            role_row, text="編輯 (可看可改)", variable=self.role_var, value="editor"
+        ).pack(side="left")
+        ttk.Radiobutton(
+            role_row, text="閱讀 (只能看)", variable=self.role_var, value="viewer"
+        ).pack(side="left", padx=(12, 0))
+
         # --- Action buttons ---
         btn_row = ttk.Frame(outer)
-        btn_row.grid(row=3, column=0, columnspan=2, pady=(10, 6), sticky="ew")
+        btn_row.grid(row=4, column=0, columnspan=2, pady=(10, 6), sticky="ew")
         ttk.Button(btn_row, text="產生 JSON", command=self._generate).pack(
             side="left", padx=(0, 6)
         )
@@ -86,13 +102,13 @@ class App(tk.Tk):
         ttk.Label(
             outer,
             text="輸出 — 可直接複製貼到 users.json 的 users 陣列裡:",
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 2))
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 2))
 
         self.output = tk.Text(
             outer, height=10, wrap="word", font=("Consolas", 10), background="#f7f7f7"
         )
-        self.output.grid(row=5, column=0, columnspan=2, sticky="nsew")
-        outer.rowconfigure(5, weight=1)
+        self.output.grid(row=6, column=0, columnspan=2, sticky="nsew")
+        outer.rowconfigure(6, weight=1)
         outer.columnconfigure(1, weight=1)
 
         # --- Hint / footer ---
@@ -103,7 +119,7 @@ class App(tk.Tk):
         )
         ttk.Label(
             outer, text=hint, foreground="#555", justify="left", font=("", 9)
-        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self.status = ttk.Label(self, text="就緒", relief="sunken", anchor="w")
         self.status.pack(side="bottom", fill="x")
@@ -121,7 +137,7 @@ class App(tk.Tk):
         if not name or not pwd:
             messagebox.showwarning("缺欄位", "請輸入帳號和密碼")
             return
-        entry = make_user_entry(name, pwd)
+        entry = make_user_entry(name, pwd, self.role_var.get())
         self.last_entry = entry
         pretty = json.dumps(entry, ensure_ascii=False, indent=2)
         self.output.delete("1.0", "end")
