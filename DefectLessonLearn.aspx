@@ -2032,12 +2032,20 @@
         const loginPwdEl = document.getElementById('loginPwd');
         const loginErr = document.getElementById('loginErr');
         let pendingAfterLogin = null;
-        function openLogin(onSuccess) {
+        // When required=true (page-load gate), hide the cancel button and
+        // the "X" close paths so the user can't dismiss the modal without
+        // logging in. Used to lock the entire page behind a credential check.
+        const loginCancelBtn = document.getElementById('loginCancel');
+        const loginTitleEl = document.querySelector('.login-card h3');
+        function openLogin(onSuccess, opts) {
+            opts = opts || {};
             pendingAfterLogin = onSuccess || null;
             loginErr.classList.remove('show');
             loginErr.textContent = '';
             loginUserEl.value = getAuthUser() || '';
             loginPwdEl.value = '';
+            loginCancelBtn.style.display = opts.required ? 'none' : '';
+            if (loginTitleEl) loginTitleEl.textContent = opts.required ? '請先登入才能瀏覽' : '進入編輯模式';
             loginOverlay.hidden = false;
             setTimeout(() => (loginUserEl.value ? loginPwdEl : loginUserEl).focus(), 0);
         }
@@ -2098,20 +2106,21 @@
             try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
             state.pendingImageCell = null;
             clearPasteHighlight();
-            // Locking always logs the user out — next "進入編輯" requires the
-            // login modal again. Matches the "鎖一次就要重輸帳密" requirement.
-            try { sessionStorage.removeItem('defectLL.authUser'); } catch (e) {}
+            // We deliberately keep the sessionStorage authUser here so the
+            // user stays logged in for viewing. The "every unlock requires
+            // password" rule is enforced separately in the toggle handler,
+            // which always opens the login modal when going view -> edit
+            // regardless of whether authUser is present.
             updateModeToggleLabel();
             renderAll();
         }
         $('#modeToggle').addEventListener('click', () => {
             if (state.viewMode) {
-                // -> edit: require login
-                if (!getAuthUser()) {
-                    openLogin(() => enterEditMode());
-                    return;
-                }
-                enterEditMode();
+                // -> edit: ALWAYS prompt for the password again, even if the
+                // user is currently logged in for viewing. This is the
+                // "每次解鎖都要重輸帳密" rule — view auth is tab-scoped,
+                // edit auth is per-unlock.
+                openLogin(() => enterEditMode());
                 return;
             }
             // -> view: warn if there are unsaved changes
@@ -2312,7 +2321,11 @@
         });
 
         // ---- Load on start ----
-        (async function load() {
+        // Gate the very first load behind the login modal so a coworker from
+        // another department who lands on the URL can't even see the table.
+        // Once they log in for this tab, viewing stays unlocked until the tab
+        // is closed; edit mode still re-prompts on every unlock.
+        async function loadData() {
             setStatus('載入中...');
             try {
                 const res = await fetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
@@ -2331,6 +2344,14 @@
             } catch (e) {
                 setStatus('載入失敗: ' + e.message, 'error');
             }
+        }
+        (function bootGate() {
+            if (getAuthUser()) {
+                loadData();
+                return;
+            }
+            setStatus('需要登入');
+            openLogin(() => loadData(), { required: true });
         })();
 
         // ============================================================
