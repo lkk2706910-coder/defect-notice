@@ -237,11 +237,16 @@
             text-align: center;
         }
         table.cases thead th[data-col] .th-sort {
-            font-size: 9px; opacity: 0.35;
+            /* Hide entirely until a column is actually sorted, then show
+               a single arrow. Avoids the "header full of stacked arrows"
+               clutter on every column. */
+            display: none;
+            font-size: 10px;
             line-height: 1;
         }
         table.cases thead th[data-col].sort-asc .th-sort,
         table.cases thead th[data-col].sort-desc .th-sort {
+            display: inline;
             opacity: 1;
             color: var(--accent);
         }
@@ -1683,7 +1688,7 @@
                 th.innerHTML =
                     '<div class="th-inner">' +
                         '<span class="th-label">' + escapeHtml(label) + '</span>' +
-                        '<span class="th-sort">▲▼</span>' +
+                        '<span class="th-sort"></span>' +
                         '<button type="button" class="th-filter" data-act="filter" title="篩選">▾</button>' +
                     '</div>';
                 // sort click on the inner area (not the filter button)
@@ -1710,7 +1715,7 @@
             document.querySelectorAll('#theadRow th[data-col]').forEach(t => {
                 t.classList.remove('sort-asc', 'sort-desc');
                 const sortEl = t.querySelector('.th-sort');
-                if (sortEl) sortEl.textContent = '▲▼';
+                if (sortEl) sortEl.textContent = '';
             });
             if (state.sort.key) {
                 const t = document.querySelector('#theadRow th[data-col="' + state.sort.key + '"]');
@@ -2298,7 +2303,7 @@
             document.querySelectorAll('#theadRow th[data-col]').forEach(th => {
                 th.classList.remove('sort-asc', 'sort-desc', 'filtered');
                 const sortEl = th.querySelector('.th-sort');
-                if (sortEl) sortEl.textContent = '▲▼';
+                if (sortEl) sortEl.textContent = '';
             });
             renderAll();
         });
