@@ -179,6 +179,48 @@
         }
         .last-edit .ref-chip:hover { background: var(--chip-active-bg); border-color: var(--chip-active-border); }
 
+        /* ===== View tabs (Case Control Table / Trend Chart) ===== */
+        .view-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 10px 0 4px;
+            margin: 4px 0 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .view-tabs button {
+            padding: 8px 18px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 10px 10px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            top: 1px;
+        }
+        .view-tabs button:hover { color: var(--text); background: var(--tint-med); }
+        .view-tabs button.active {
+            background: var(--panel);
+            color: var(--text);
+            border-color: var(--border);
+            border-bottom: 1px solid var(--panel);
+        }
+        /* When Dashboard is active, hide every case-table-only chrome */
+        body.view-dashboard .case-only { display: none !important; }
+        body.view-dashboard #viewCases     { display: none; }
+        body.view-cases     #viewDashboard { display: none; }
+        .dashboard-wrap {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--panel);
+            padding: 40px 28px;
+            min-height: 360px;
+        }
+        .dashboard-wrap h2 { margin: 0 0 8px; font-size: 16px; }
+        .dashboard-wrap .placeholder { color: var(--muted); line-height: 1.6; }
+
         .table-wrap {
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -1160,13 +1202,17 @@
         <div class="header">
             <h1>TF1/2 Line Yield System</h1>
             <span class="subtitle">內嵌 base64 圖片 + 可編輯/搜尋 / 自動寫回 JSON</span>
+            <div class="view-tabs">
+                <button type="button" data-view="dashboard" class="active">Dashboard</button>
+                <button type="button" data-view="cases">Case Control Table</button>
+            </div>
             <div class="toolbar">
-                <input type="search" id="searchInput" class="search" placeholder="搜尋任一欄位文字..." />
-                <button type="button" id="btnAdd" class="btn btn-primary">+ 新增 Case</button>
-                <button type="button" id="btnClearFilters" class="btn" title="清除所有排序與篩選">↻ 清除篩選</button>
-                <button type="button" id="btnSave" class="btn">儲存</button>
-                <button type="button" id="btnHelp" class="btn-help" title="顯示操作提示" style="display:none;">?</button>
-                <button type="button" id="modeToggle" class="mode-toggle" title="切換唯讀 / 編輯模式">
+                <input type="search" id="searchInput" class="search case-only" placeholder="搜尋任一欄位文字..." />
+                <button type="button" id="btnAdd" class="btn btn-primary case-only">+ 新增 Case</button>
+                <button type="button" id="btnClearFilters" class="btn case-only" title="清除所有排序與篩選">↻ 清除篩選</button>
+                <button type="button" id="btnSave" class="btn case-only">儲存</button>
+                <button type="button" id="btnHelp" class="btn-help case-only" title="顯示操作提示" style="display:none;">?</button>
+                <button type="button" id="modeToggle" class="mode-toggle case-only" title="切換唯讀 / 編輯模式">
                     <span class="mode-toggle-label"></span>
                 </button>
                 <button type="button" id="btnLogout" class="btn-logout" title="登出" hidden>登出</button>
@@ -1175,11 +1221,17 @@
                     <span class="theme-toggle-label"></span>
                 </button>
                 <span id="statusPill" class="status-pill">載入中...</span>
-                <span id="lastEdit" class="last-edit" hidden></span>
+                <span id="lastEdit" class="last-edit case-only" hidden></span>
             </div>
         </div>
 
-        <div class="usage-hint" id="usageHint">
+        <div id="viewDashboard" class="dashboard-wrap">
+            <h2>Dashboard</h2>
+            <div class="placeholder">圖表內容待加入。</div>
+        </div>
+
+        <div id="viewCases">
+        <div class="usage-hint case-only" id="usageHint">
             <div class="usage-content">
                 <span class="usage-tag">💡 操作提示</span>
                 <span class="usage-item"><b>圖片</b>:點該格 → <kbd>Ctrl</kbd>+<kbd>V</kbd> 貼上(可連續貼多張),或直接拖檔到該格</span>
@@ -1219,6 +1271,7 @@
                 <tbody id="tbody"></tbody>
             </table>
         </div>
+        </div><!-- /#viewCases -->
     </div>
 
     <!-- AI assistant floating bubble + chat panel -->
@@ -2491,6 +2544,24 @@
             setStatus('需要登入');
             openLogin(() => loadData(), { required: true });
         })();
+
+        // ---- View switch (Dashboard / Case Control Table) ----
+        // Body class drives visibility (CSS handles the swap).  Default is
+        // Dashboard on every fresh load -- we deliberately do NOT remember
+        // the previous tab in localStorage, so opening the page always lands
+        // on the Dashboard first.
+        function setView(name) {
+            if (name !== 'cases' && name !== 'dashboard') name = 'dashboard';
+            document.body.classList.remove('view-cases', 'view-dashboard');
+            document.body.classList.add('view-' + name);
+            document.querySelectorAll('.view-tabs button').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-view') === name);
+            });
+        }
+        document.querySelectorAll('.view-tabs button').forEach(b => {
+            b.addEventListener('click', () => setView(b.getAttribute('data-view')));
+        });
+        setView('dashboard');
 
         // ============================================================
         //  AI assistant — floating bubble + chat panel
