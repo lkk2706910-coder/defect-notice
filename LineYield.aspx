@@ -17,7 +17,7 @@
             } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
         })();
     </script>
-    <title>Defect Case Lesson Learn</title>
+    <title>TF1/2 Line Yield System</title>
     <style>
         :root {
             color-scheme: dark;
@@ -1158,7 +1158,7 @@
     </div>
     <div class="container">
         <div class="header">
-            <h1>Defect Case Lesson Learn</h1>
+            <h1>TF1/2 Line Yield System</h1>
             <span class="subtitle">內嵌 base64 圖片 + 可編輯/搜尋 / 自動寫回 JSON</span>
             <div class="toolbar">
                 <input type="search" id="searchInput" class="search" placeholder="搜尋任一欄位文字..." />
