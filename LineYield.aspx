@@ -1,4 +1,4 @@
-﻿<%@ Page Language="C#" AutoEventWireup="true" CodeFile="DefectLessonLearn.aspx.cs" Inherits="DefectLessonLearn" ResponseEncoding="utf-8" %>
+﻿<%@ Page Language="C#" AutoEventWireup="true" CodeFile="LineYield.aspx.cs" Inherits="LineYield" ResponseEncoding="utf-8" %>
 
 <!DOCTYPE html>
 <html>
@@ -2194,7 +2194,7 @@
             const submitBtn = document.getElementById('loginSubmit');
             submitBtn.disabled = true;
             try {
-                const res = await fetch('DefectLessonLearn.aspx?op=login', {
+                const res = await fetch('LineYield.aspx?op=login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json; charset=utf-8' },
                     body: JSON.stringify({ username: username, password: password })
@@ -2331,7 +2331,7 @@
                         state.dirtyIds.delete(id);
                         continue;
                     }
-                    const res = await authFetch('DefectLessonLearn.aspx?op=upsert', {
+                    const res = await authFetch('LineYield.aspx?op=upsert', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json; charset=utf-8'
@@ -2348,7 +2348,7 @@
                 // Deletes
                 for (const id of deletedIds) {
                     setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
-                    const res = await authFetch('DefectLessonLearn.aspx?op=delete&id=' + encodeURIComponent(id), {
+                    const res = await authFetch('LineYield.aspx?op=delete&id=' + encodeURIComponent(id), {
                         method: 'POST'
                     });
                     const data = await res.json();
@@ -2368,7 +2368,7 @@
 
         async function reloadFromServer(opts) {
             opts = opts || {};
-            const res = await authFetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
+            const res = await authFetch('LineYield.aspx?op=list', { cache: 'no-store' });
             const data = await res.json();
             const fromServer = Array.isArray(data.cases) ? data.cases : [];
             fromServer.forEach(c => { if (!c.id) c.id = uid(); });
@@ -2463,7 +2463,7 @@
         async function loadData() {
             setStatus('載入中...');
             try {
-                const res = await authFetch('DefectLessonLearn.aspx?op=list', { cache: 'no-store' });
+                const res = await authFetch('LineYield.aspx?op=list', { cache: 'no-store' });
                 const data = await res.json();
                 state.cases = Array.isArray(data.cases) ? data.cases : [];
                 // ensure each has an id
@@ -3184,7 +3184,7 @@
                         });
                     }
                     messages.push(...s.history);
-                    const res = await authFetch('DefectLessonLearn.aspx?op=chat', {
+                    const res = await authFetch('LineYield.aspx?op=chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json; charset=utf-8' },
                         body: JSON.stringify({ messages: messages })

@@ -9,7 +9,7 @@ using System.Text;
 using System.Web;
 using System.Web.Script.Serialization;
 
-public partial class DefectLessonLearn : System.Web.UI.Page
+public partial class LineYield : System.Web.UI.Page
 {
     private const string DataFileName = "App_Data\\defect_lessons.json";
     private const string UsersFileName = "App_Data\\users.json";
