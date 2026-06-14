@@ -11,7 +11,12 @@ using System.Web.Script.Serialization;
 
 public partial class LineYield : System.Web.UI.Page
 {
-    private const string DataFileName = "App_Data\\Line_Yield.json";
+    // Two datasets share the same page.  The client picks one per request
+    // via ?ds=light (default) or ?ds=bulk (the inherited lesson-learn data).
+    // Each dataset has its own data file and its own backup-mirror file
+    // inside App_Data\backup\.
+    private const string DataFileLight = "App_Data\\Line_Yield.json";
+    private const string DataFileBulk  = "App_Data\\Lesson_Learn.json";
     private const string UsersFileName = "App_Data\\users.json";
 
     private static readonly object _fileLock = new object();
@@ -27,10 +32,23 @@ public partial class LineYield : System.Web.UI.Page
         new Dictionary<string, TokenInfo>(StringComparer.Ordinal);
     private const int TokenLifetimeHours = 8;
 
+    // Resolve which dataset file this request is hitting based on the
+    // ?ds= query parameter.  Anything other than "bulk" falls back to
+    // "light" so a missing parameter never crashes the legacy callers.
+    private string GetDatasetKey()
+    {
+        string ds = Request.QueryString["ds"];
+        return string.Equals(ds, "bulk", StringComparison.OrdinalIgnoreCase) ? "bulk" : "light";
+    }
     private string GetDataFilePath()
     {
         string pageDir = Path.GetDirectoryName(Request.PhysicalPath);
-        return Path.Combine(pageDir, DataFileName);
+        string fileName = GetDatasetKey() == "bulk" ? DataFileBulk : DataFileLight;
+        return Path.Combine(pageDir, fileName);
+    }
+    private string GetBackupFileName()
+    {
+        return GetDatasetKey() == "bulk" ? "Lesson_Learn_backup.json" : "Line_Yield_backup.json";
     }
     private string GetUsersFilePath()
     {
@@ -607,7 +625,9 @@ public partial class LineYield : System.Web.UI.Page
         {
             string backupDir = Path.Combine(Path.GetDirectoryName(path), "backup");
             if (!Directory.Exists(backupDir)) Directory.CreateDirectory(backupDir);
-            WriteAtomic(Path.Combine(backupDir, "Line_Yield_backup.json"), content);
+            // Each dataset has its own backup mirror so they don't clobber
+            // each other when both are being edited.
+            WriteAtomic(Path.Combine(backupDir, GetBackupFileName()), content);
         }
         catch { /* backup failure must not block the main save */ }
     }
@@ -634,6 +654,7 @@ public partial class LineYield : System.Web.UI.Page
             var entry = new Dictionary<string, object>();
             entry["at"] = now.ToString("o");
             entry["by"] = by ?? "";
+            entry["ds"] = GetDatasetKey();   // which dataset the edit happened in
             entry["op"] = op;
             var idArr = new ArrayList();
             if (ids != null) foreach (var id in ids) idArr.Add(id);

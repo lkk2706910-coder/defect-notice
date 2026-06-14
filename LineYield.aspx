@@ -207,10 +207,12 @@
             border-color: var(--border);
             border-bottom: 1px solid var(--panel);
         }
-        /* When Dashboard is active, hide every case-table-only chrome */
+        /* Dashboard hides the case table chrome. The case table is shown
+           for either dataset view (light / bulk). */
         body.view-dashboard .case-only { display: none !important; }
         body.view-dashboard #viewCases     { display: none; }
-        body.view-cases     #viewDashboard { display: none; }
+        body.view-light     #viewDashboard,
+        body.view-bulk      #viewDashboard { display: none; }
         .dashboard-wrap {
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -1204,7 +1206,8 @@
             <span class="subtitle">內嵌 base64 圖片 + 可編輯/搜尋 / 自動寫回 JSON</span>
             <div class="view-tabs">
                 <button type="button" data-view="dashboard" class="active">Dashboard</button>
-                <button type="button" data-view="cases">Case Control Table</button>
+                <button type="button" data-view="light">少片數報廢</button>
+                <button type="button" data-view="bulk">大宗報廢</button>
             </div>
             <div class="toolbar">
                 <input type="search" id="searchInput" class="search case-only" placeholder="搜尋任一欄位文字..." />
@@ -1342,6 +1345,9 @@
             loadedIds: new Set(),
             // Set by the AI panel via applyAiFilter(); null = no AI filter.
             aiFilterIds: null,
+            // Which dataset the table is currently bound to.  Driven by the
+            // view tabs; "light" = 少片數報廢, "bulk" = 大宗報廢.
+            currentDataset: 'light',
             // View-only mode: cells become non-editable and all mutation UI
             // (+ 新增 / 儲存 / 刪除 / image upload / link edit) is hidden.
             // Defaults to TRUE so first-time visitors can't accidentally edit
@@ -2384,7 +2390,7 @@
                         state.dirtyIds.delete(id);
                         continue;
                     }
-                    const res = await authFetch('LineYield.aspx?op=upsert', {
+                    const res = await authFetch('LineYield.aspx?op=upsert&ds=' + state.currentDataset, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json; charset=utf-8'
@@ -2401,7 +2407,7 @@
                 // Deletes
                 for (const id of deletedIds) {
                     setStatus('儲存中 ' + (++done) + ' / ' + total + '...');
-                    const res = await authFetch('LineYield.aspx?op=delete&id=' + encodeURIComponent(id), {
+                    const res = await authFetch('LineYield.aspx?op=delete&id=' + encodeURIComponent(id) + '&ds=' + state.currentDataset, {
                         method: 'POST'
                     });
                     const data = await res.json();
@@ -2421,7 +2427,7 @@
 
         async function reloadFromServer(opts) {
             opts = opts || {};
-            const res = await authFetch('LineYield.aspx?op=list', { cache: 'no-store' });
+            const res = await authFetch('LineYield.aspx?op=list&ds=' + state.currentDataset, { cache: 'no-store' });
             const data = await res.json();
             const fromServer = Array.isArray(data.cases) ? data.cases : [];
             fromServer.forEach(c => { if (!c.id) c.id = uid(); });
@@ -2516,7 +2522,7 @@
         async function loadData() {
             setStatus('載入中...');
             try {
-                const res = await authFetch('LineYield.aspx?op=list', { cache: 'no-store' });
+                const res = await authFetch('LineYield.aspx?op=list&ds=' + state.currentDataset, { cache: 'no-store' });
                 const data = await res.json();
                 state.cases = Array.isArray(data.cases) ? data.cases : [];
                 // ensure each has an id
@@ -2551,12 +2557,33 @@
         // the previous tab in localStorage, so opening the page always lands
         // on the Dashboard first.
         function setView(name) {
-            if (name !== 'cases' && name !== 'dashboard') name = 'dashboard';
-            document.body.classList.remove('view-cases', 'view-dashboard');
+            if (name !== 'light' && name !== 'bulk' && name !== 'dashboard') name = 'dashboard';
+
+            // Switching datasets while there are unsaved changes would silently
+            // throw them away on the re-render. Ask once.
+            if ((name === 'light' || name === 'bulk') && name !== state.currentDataset) {
+                if (state.dirtyIds.size + state.deletedIds.size > 0) {
+                    if (!confirm('當前分頁有未儲存的變更,切換會被清掉。確定?')) return;
+                }
+            }
+            document.body.classList.remove('view-dashboard', 'view-light', 'view-bulk');
             document.body.classList.add('view-' + name);
             document.querySelectorAll('.view-tabs button').forEach(b => {
                 b.classList.toggle('active', b.getAttribute('data-view') === name);
             });
+            if (name === 'light' || name === 'bulk') {
+                if (state.currentDataset !== name) {
+                    state.currentDataset = name;
+                    // Reset per-dataset transient state before pulling fresh rows.
+                    state.dirtyIds.clear();
+                    state.deletedIds.clear();
+                    state.aiFilterIds = null;
+                    state.filters = {};
+                    state.cases = [];
+                    state.loadedIds = new Set();
+                    if (typeof loadData === 'function') loadData();
+                }
+            }
         }
         document.querySelectorAll('.view-tabs button').forEach(b => {
             b.addEventListener('click', () => setView(b.getAttribute('data-view')));
