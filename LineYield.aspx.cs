@@ -11,7 +11,7 @@ using System.Web.Script.Serialization;
 
 public partial class LineYield : System.Web.UI.Page
 {
-    private const string DataFileName = "App_Data\\defect_lessons.json";
+    private const string DataFileName = "App_Data\\Line_Yield.json";
     private const string UsersFileName = "App_Data\\users.json";
 
     private static readonly object _fileLock = new object();
@@ -607,7 +607,7 @@ public partial class LineYield : System.Web.UI.Page
         {
             string backupDir = Path.Combine(Path.GetDirectoryName(path), "backup");
             if (!Directory.Exists(backupDir)) Directory.CreateDirectory(backupDir);
-            WriteAtomic(Path.Combine(backupDir, "defect_lesson_backup.json"), content);
+            WriteAtomic(Path.Combine(backupDir, "Line_Yield_backup.json"), content);
         }
         catch { /* backup failure must not block the main save */ }
     }
