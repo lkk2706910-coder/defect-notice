@@ -612,8 +612,14 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         catch { /* backup failure must not block the main save */ }
     }
 
-    // Append-only audit trail in App_Data\backup\edit_history.jsonl
+    // Append-only audit trail in App_Data\backup\edit_history_YYYY-MM.jsonl
     // One JSON object per line: {at, by, op, ids, snapshots?}.
+    // File naming partitions by UTC year/month -- every save lands in the
+    // file matching the entry's own "at" timestamp, so months become
+    // self-contained archives (rename / move / delete one month without
+    // touching the others). The same UtcNow value is used for both the
+    // filename and the entry timestamp so a save right at the month
+    // boundary stays consistent.
     // 'snapshots' carries the BEFORE state for upsert (so an edit can be
     // reverted) and the full deleted case body for delete (so it can be
     // restored). Both intentionally omitted for "whole_save" to keep the
@@ -624,8 +630,9 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         try
         {
             string logDir = Path.Combine(Path.GetDirectoryName(GetDataFilePath()), "backup");
+            DateTime now = DateTime.UtcNow;
             var entry = new Dictionary<string, object>();
-            entry["at"] = DateTime.UtcNow.ToString("o");
+            entry["at"] = now.ToString("o");
             entry["by"] = by ?? "";
             entry["op"] = op;
             var idArr = new ArrayList();
@@ -638,10 +645,11 @@ public partial class DefectLessonLearn : System.Web.UI.Page
                 entry["snapshots"] = snapArr;
             }
             string line = NewSerializer().Serialize(entry) + "\n";
+            string fileName = "edit_history_" + now.ToString("yyyy-MM") + ".jsonl";
             lock (_logLock)
             {
                 if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
-                File.AppendAllText(Path.Combine(logDir, "edit_history.jsonl"),
+                File.AppendAllText(Path.Combine(logDir, fileName),
                     line, new System.Text.UTF8Encoding(false));
             }
         }
