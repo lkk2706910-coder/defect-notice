@@ -1392,7 +1392,6 @@
             { key: 'reviewAR',      label: '已review AR' },
             { key: 'generation',    label: 'Generation' },
             { key: 'owner',         label: 'owner' },
-            { key: 'category',      label: '分類填寫' },
             { key: 'createDate',    label: 'Create_date',           kind: 'date' },
             { key: 'lotId',         label: 'LotID' },
             { key: 'qty',           label: 'Qty' },
