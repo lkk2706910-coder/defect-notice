@@ -95,18 +95,41 @@
             --link: #1d4ed8;
         }
         * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; }
+        /* App-shell layout: lock body to viewport height so the page
+           itself never scrolls vertically. The header (title + tabs +
+           toolbar) stays fixed at the top, and the cases / dashboard
+           panes get the remaining height with their own internal
+           scroll. That way the table's horizontal scrollbar lives
+           inside the visible area and you don't have to scroll the
+           outer page (and lose the title) to reach it. */
+        html, body { margin: 0; padding: 0; height: 100%; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", Arial, sans-serif;
             background: var(--bg-gradient);
             color: var(--text);
-            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
         }
-        .container { max-width: 100%; padding: 16px 20px; }
+        .container {
+            max-width: 100%;
+            padding: 16px 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
         .header {
             display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
             margin-bottom: 14px;
+            flex: 0 0 auto;
         }
+        #viewCases, #viewDashboard {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .usage-hint { flex: 0 0 auto; }
         h1 { font-size: 20px; font-weight: 800; margin: 0; }
         .subtitle { color: var(--muted); font-size: 12px; margin-left: 4px; }
         .toolbar {
@@ -228,33 +251,14 @@
             border-radius: 12px;
             background: var(--panel);
             overflow: auto;
-            max-height: calc(100vh - 140px);
+            flex: 1 1 auto;
+            min-height: 0;
         }
         table.cases {
             border-collapse: collapse;
-            width: max-content;
-            /* Hard floor: bulk schema has ~17 text cols + 2 image cols.
-               At 180px per text col + 190px per image col + 70px actions
-               total ~3500px -- guaranteed to overflow any standard
-               monitor (1080p / 1440p / QHD ultrawide) at 100% zoom so
-               horizontal scroll is always available. */
-            min-width: 100%;
+            width: 100%;
             font-size: 12px;
         }
-        /* Each editable / link cell takes a generous min-width so even
-           the bulk page, which has many columns, summed up always
-           exceeds the wrapper width on common monitor sizes and the
-           wrapper's overflow:auto provides horizontal scrolling. Also
-           applied to thead th data-cols so empty bulk states (no data
-           rows yet) still get the wide layout. */
-        table.cases th, table.cases td { white-space: normal; }
-        table.cases td.editable,
-        table.cases td.link-cell,
-        table.cases th[data-col]      { min-width: 180px; }
-        table.cases td.img-cell,
-        table.cases th.col-img        { min-width: 190px; }
-        table.cases td.actions        { min-width: 70px; white-space: nowrap; position: sticky; right: 0; background: var(--panel); z-index: 2; }
-        table.cases th:last-child     { position: sticky; right: 0; background: var(--panel-elevated); z-index: 3; }
         table.cases th, table.cases td {
             border: 1px solid var(--border);
             padding: 6px 8px;
