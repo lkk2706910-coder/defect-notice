@@ -232,9 +232,18 @@
         }
         table.cases {
             border-collapse: collapse;
-            width: 100%;
+            width: max-content;
+            min-width: 100%;
             font-size: 12px;
         }
+        /* Let cells grow to their natural width instead of being crushed
+           into the wrapper -- that's what kept the rightmost column
+           (the delete button) off-screen and unreachable on narrow
+           viewports. The wrapper's overflow:auto then provides
+           horizontal scroll. */
+        table.cases th, table.cases td { white-space: normal; }
+        table.cases td.editable { min-width: 110px; }
+        table.cases td.actions  { min-width: 70px; white-space: nowrap; }
         table.cases th, table.cases td {
             border: 1px solid var(--border);
             padding: 6px 8px;
