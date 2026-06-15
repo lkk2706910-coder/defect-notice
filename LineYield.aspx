@@ -233,23 +233,28 @@
         table.cases {
             border-collapse: collapse;
             width: max-content;
+            /* Hard floor: bulk schema has ~17 text cols + 2 image cols.
+               At 180px per text col + 190px per image col + 70px actions
+               total ~3500px -- guaranteed to overflow any standard
+               monitor (1080p / 1440p / QHD ultrawide) at 100% zoom so
+               horizontal scroll is always available. */
             min-width: 100%;
             font-size: 12px;
         }
-        /* Let cells grow to their natural width instead of being crushed
-           into the wrapper -- that's what kept the rightmost column
-           (the delete button) off-screen and unreachable on narrow
-           viewports. The wrapper's overflow:auto then provides
-           horizontal scroll. min-widths are picked so the bulk schema
-           (~17 text cols + 2 image cols) reliably overflows on a 1080p
-           monitor at 100% zoom; raise them if a future, wider monitor
-           still fits everything. */
+        /* Each editable / link cell takes a generous min-width so even
+           the bulk page, which has many columns, summed up always
+           exceeds the wrapper width on common monitor sizes and the
+           wrapper's overflow:auto provides horizontal scrolling. Also
+           applied to thead th data-cols so empty bulk states (no data
+           rows yet) still get the wide layout. */
         table.cases th, table.cases td { white-space: normal; }
-        table.cases td.editable  { min-width: 140px; }
-        table.cases td.link-cell { min-width: 140px; }
-        table.cases td.img-cell  { min-width: 190px; }
-        table.cases td.actions   { min-width: 70px;  white-space: nowrap; position: sticky; right: 0; background: var(--panel); z-index: 2; }
-        table.cases th:last-child { position: sticky; right: 0; background: var(--panel-elevated); z-index: 3; }
+        table.cases td.editable,
+        table.cases td.link-cell,
+        table.cases th[data-col]      { min-width: 180px; }
+        table.cases td.img-cell,
+        table.cases th.col-img        { min-width: 190px; }
+        table.cases td.actions        { min-width: 70px; white-space: nowrap; position: sticky; right: 0; background: var(--panel); z-index: 2; }
+        table.cases th:last-child     { position: sticky; right: 0; background: var(--panel-elevated); z-index: 3; }
         table.cases th, table.cases td {
             border: 1px solid var(--border);
             padding: 6px 8px;
