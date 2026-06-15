@@ -17,7 +17,7 @@
             } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
         })();
     </script>
-    <title>TF1/2 Line Yield System</title>
+    <title>TF2 Line Yield Control System</title>
     <style>
         :root {
             color-scheme: dark;
@@ -1309,12 +1309,12 @@
     </div>
     <div class="container">
         <div class="header">
-            <h1>TF1/2 Line Yield System</h1>
+            <h1>TF2 Line Yield Control System</h1>
             <span class="subtitle">內嵌 base64 圖片 + 可編輯/搜尋 / 自動寫回 JSON</span>
             <div class="view-tabs">
                 <button type="button" data-view="dashboard" class="active">Dashboard</button>
-                <button type="button" data-view="light">少片數報廢</button>
-                <button type="button" data-view="bulk">大宗報廢</button>
+                <button type="button" data-view="light">Line Yield</button>
+                <button type="button" data-view="bulk">Lesson Learn</button>
             </div>
             <div class="toolbar">
                 <input type="search" id="searchInput" class="search case-only" placeholder="搜尋任一欄位文字..." />
@@ -1429,25 +1429,24 @@
             { key: 'other',        label: '其他特徵' }
         ];
 
-        // 少片數報廢:no image columns, Link is the multi-URL editor,
+        // Line Yield:no image columns, Link is the multi-URL editor,
         // every other column is plain text input.
         const COLUMNS_LIGHT = [
+            { key: 'eqpType',       label: 'Eqptype' },
+            { key: 'entity',        label: 'Entity' },
+            { key: 'parts',         label: 'Parts' },
+            { key: 'finalAction',   label: 'Final_Action' },
             { key: 'link',          label: 'Link',                  kind: 'link' },
-            { key: 'reviewAR',      label: '已review AR' },
             { key: 'generation',    label: 'Generation' },
-            { key: 'owner',         label: 'owner' },
             { key: 'createDate',    label: 'Create_date',           kind: 'date' },
             { key: 'lotId',         label: 'LotID',                 kind: 'multiline' },
             { key: 'qty',           label: 'Qty',                   kind: 'multiline' },
             { key: 'eqpId',         label: 'EqpID' },
             { key: 'reason',        label: '原因' },
             { key: 'rootCause',     label: 'Root cause' },
-            { key: 'parts',         label: 'Parts' },
-            { key: 'finalAction',   label: 'Final_Action' },
             { key: 'phenomenon1',   label: '現象1階',              kind: 'cascade' },
             { key: 'ze50',          label: 'ZE5.0',                kind: 'cascade' },
             { key: 'ze1',           label: 'ZE 1階',               kind: 'cascade' },
-            { key: 'meetingUpdate', label: 'meeting update',        kind: 'date' },
             { key: 'productType',   label: 'auto or normal 產品' }
         ];
 
@@ -3457,7 +3456,7 @@
                 const obj = (entry && entry.obj) ? entry.obj : entry;
                 const targetCols = (ds === 'bulk' ? COLUMNS_BULK : COLUMNS_LIGHT);
                 const editableKeys = targetCols.filter(c => c.kind !== 'img').map(c => c.key);
-                const dsLabel = ds === 'bulk' ? '大宗報廢' : '少片數報廢';
+                const dsLabel = ds === 'bulk' ? 'Lesson Learn' : 'Line Yield';
                 const isCrossDataset = ds !== state.currentDataset;
 
                 const card = document.createElement('div');
@@ -3879,16 +3878,15 @@
                         const bulkKeys  = COLUMNS_BULK .filter(c => c.kind !== 'img').map(c => c.key);
                         const currentKeys = state.currentDataset === 'bulk' ? bulkKeys : lightKeys;
                         const exampleJson = '{\n' + currentKeys.slice(0, 6).map(k => '  "' + k + '": "..."').join(',\n') + '\n}';
-                        const datasetLabel = state.currentDataset === 'bulk' ? '大宗報廢' : '少片數報廢';
+                        const datasetLabel = state.currentDataset === 'bulk' ? 'Lesson Learn' : 'Line Yield';
                         messages.push({
                             role: 'system',
                             content:
-                                '【系統身分】這是「TF1/2 Line Yield System」(線良率系統),不是 lesson learn 系統。' +
+                                '【系統身分】這是「TF2 Line Yield Control System」(線良率管控系統)。' +
                                 '\n系統有【兩個完全獨立】的資料分頁,各自有不同的欄位 schema、不同的資料檔:' +
-                                '\n  - 「少片數報廢」(ds="light"):記錄單片或少量片數的報廢 case。' +
-                                '\n  - 「大宗報廢」(ds="bulk"):記錄整批或大量片數的報廢 case。' +
+                                '\n  - 「Line Yield」(ds="light"):記錄單片或少量片數的 line yield 報廢 case。' +
+                                '\n  - 「Lesson Learn」(ds="bulk"):記錄整批或大量片數的 lesson learn case。' +
                                 '\n兩者不是父子關係、不是分類關係 — 是**兩個獨立的資料表**。使用者要加入哪一個,你就用哪一個的 schema 建立 <new-case>。' +
-                                '\n禁止把「少片數」當成 lesson learn 的一個分類來回應。禁止寫「加進 lesson learn」之類的字眼。' +
                                 '\n\n今天日期: ' + (new Date().toISOString().slice(0,10).replace(/-/g, '/')) + '。當前分頁:【' + datasetLabel + '】。' +
                                 '\n\n=============================================' +
                                 '\n【規則 A - 新增 case (最高優先,違反 = 失敗)】' +
@@ -3898,13 +3896,15 @@
                                 '\n→ 你的回應**必須**至少包含一個 <new-case ds="...">{...}</new-case> 區塊。' +
                                 '\n→ **禁止**只寫文字摘要、策略建議、判定規則、操作指引、欄位定義。這些都不算完成任務,只會讓使用者看不到任何卡片。' +
                                 '\n→ 即使圖中欄位跟目標 schema 看起來「對不上」,你也**必須**輸出區塊。' +
-                                '\n→ **日期欄位**(light:createDate / light:meetingUpdate / bulk:date)的值請**一律使用 yyyy-mm-dd 格式**(例:2026-06-15),不要用 yyyy/m/d 或 m/d。今天日期請參考訊息開頭給的值。' +
+                                '\n→ **日期欄位**(light:createDate / bulk:date)的值請**一律使用 yyyy-mm-dd 格式**(例:2026-06-15),不要用 yyyy/m/d 或 m/d。今天日期請參考訊息開頭給的值。' +
                                 '\n→ **欄位映射常用對照(找得到就填)**:' +
                                 '\n   時間/日期/Date → light:createDate 或 bulk:date(用 yyyy-mm-dd)' +
                                 '\n   機台/設備/EQ → light:eqpId 或 bulk:equipment' +
+                                '\n   機台類型/Eqp type/Tool type → light:eqpType(bulk 無對應就省略)' +
+                                '\n   Entity/廠別/區域 → light:entity(bulk 無對應就省略)' +
                                 '\n   原因/Root Cause → 兩邊都有 rootCause' +
                                 '\n   零件/Parts → 兩邊都有 parts' +
-                                '\n   分類/類別 → light:category 或 bulk:category' +
+                                '\n   分類/類別 → bulk:category(light 無對應就省略)' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
                                 '\n   連結/Link → 兩邊都有 link' +
                                 '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)。**多個批號用 \\n 換行分開**,例如 "GTC5Q.26\\nGTC5Q.22\\nGTC5Q.29"' +
@@ -3912,15 +3912,15 @@
                                 '\n   缺陷類型/Defect Type → bulk:defectType(light 無對應就省略)' +
                                 '\n→ 讀不到的 key 直接省略不要寫,**但 JSON 區塊還是要出來**。寧可只有 2-3 個欄位也要輸出,絕對不能改寫成文字摘要。' +
                                 '\n\n【目標分頁判斷】' +
-                                '\n- 使用者句子有「少片數」/「少片」/「light」 → ds="light"' +
-                                '\n- 使用者句子有「大宗」/「大宗報廢」/「bulk」 → ds="bulk"' +
+                                '\n- 使用者句子有「line yield」/「少片」/「light」 → ds="light"' +
+                                '\n- 使用者句子有「lesson learn」/「大宗」/「bulk」 → ds="bulk"' +
                                 '\n- 兩者都沒提 → ds="' + state.currentDataset + '"(當前分頁)' +
                                 '\n\n【schema 對照】' +
                                 '\n- ds="light" 可用 key: ' + lightKeys.join(', ') +
                                 '\n- ds="bulk" 可用 key: ' + bulkKeys.join(', ') +
                                 '\n區塊裡只能用該 ds 列出的 key,跨 schema 的 key 一律不要寫。' +
                                 '\n\n【若上傳的是表格/列表/清單圖片】每一列當一筆 case,N 列輸出 N 個區塊,全部用同一個 ds 值。即使來源欄位跟目標 schema 不完全對得上,也要盡量把能對應的欄位填進去(例如表格的「時間」可以填到 light 的 createDate 或 bulk 的 date)。' +
-                                '\n\n【範例 - 使用者說「幫我加入少片數case」+ 上傳表格圖】' +
+                                '\n\n【範例 - 使用者說「幫我加入 line yield case」+ 上傳表格圖】' +
                                 '\n回應前面可以一句話確認,然後直接連續輸出區塊:' +
                                 '\n好的,以下是從圖中擷取的 N 筆 case:' +
                                 '\n<new-case ds="light">' +
