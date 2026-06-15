@@ -1463,6 +1463,7 @@
             { key: 'entity',        label: 'Entity',                kind: 'cascade' },
             { key: 'parts',         label: 'Parts' },
             { key: 'finalAction',   label: 'Final_Action' },
+            { key: 'reasonCategory',label: '原因分類',              kind: 'cascade' },
             { key: 'link',          label: 'Link',                  kind: 'link' },
             { key: 'generation',    label: 'Generation' },
             { key: 'createDate',    label: 'Create_date',           kind: 'date' },
@@ -1690,7 +1691,15 @@
         // Fixed option lists for simple (non-chained) dropdowns. Reuses
         // the cascade rendering path so we don't add a whole new kind.
         const SIMPLE_OPTIONS = {
-            site: ['12A', '12X', '12i']
+            site: ['12A', '12X', '12i'],
+            reasonCategory: [
+                '機台 Defect',
+                '機台 Down',
+                '機台 FDC',
+                '機台 Process',
+                '機台 Scratch',
+                '機台破片'
+            ]
         };
 
         function cascadeOptionsFor(key, c) {
@@ -4105,6 +4114,7 @@
                                 '\n   零件/Parts → 兩邊都有 parts' +
                                 '\n   分類/類別 → bulk:category(light 無對應就省略)' +
                                 '\n   Site/廠區/廠別 → bulk:site,**值只能是 12A / 12X / 12i 三選一**(light 無對應就省略)' +
+                                '\n   原因分類 → light:reasonCategory,**值只能是這 6 個之一**:機台 Defect / 機台 Down / 機台 FDC / 機台 Process / 機台 Scratch / 機台破片(bulk 無對應就省略)' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
                                 '\n   連結/Link → 兩邊都有 link' +
                                 '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)。**多個批號用 \\n 換行分開**,例如 "GTC5Q.26\\nGTC5Q.22\\nGTC5Q.29"' +
