@@ -535,6 +535,27 @@
         }
         td.cascade-cell select:focus { border-color: var(--accent); }
         td.cascade-cell select:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.6; }
+
+        /* Date-picker cells (createDate / meetingUpdate in 少片數) */
+        td.date-cell input[type="date"] {
+            width: 100%;
+            min-width: 130px;
+            padding: 4px 6px;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+        }
+        td.date-cell input[type="date"]:focus { border-color: var(--accent); }
+        /* Force the calendar icon to a colour scheme matching the theme */
+        td.date-cell input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(var(--cal-invert, 1));
+            opacity: 0.6;
+        }
+        html[data-theme="light"] { --cal-invert: 0; }
         /* contenteditable placeholder for empty cells */
         td .cell-text[data-placeholder]:empty::before {
             content: attr(data-placeholder);
@@ -1347,7 +1368,7 @@
             { key: 'generation',    label: 'Generation' },
             { key: 'owner',         label: 'owner' },
             { key: 'category',      label: '分類填寫' },
-            { key: 'createDate',    label: 'Create_date' },
+            { key: 'createDate',    label: 'Create_date',           kind: 'date' },
             { key: 'lotId',         label: 'LotID' },
             { key: 'qty',           label: 'Qty' },
             { key: 'eqpId',         label: 'EqpID' },
@@ -1358,7 +1379,7 @@
             { key: 'phenomenon1',   label: '現象1階',              kind: 'cascade' },
             { key: 'ze50',          label: 'ZE5.0',                kind: 'cascade' },
             { key: 'ze1',           label: 'ZE 1階',               kind: 'cascade' },
-            { key: 'meetingUpdate', label: 'meeting update' },
+            { key: 'meetingUpdate', label: 'meeting update',        kind: 'date' },
             { key: 'productType',   label: 'auto or normal 產品' }
         ];
 
@@ -1469,6 +1490,31 @@
                 ]
             }
         };
+
+        // Normalize any saved date string into the ISO yyyy-mm-dd format
+        // that <input type="date"> requires. Old "m/d" / "mm/dd" entries
+        // get the current year prepended so the picker can show something
+        // sensible -- the new value is then re-saved in full ISO once the
+        // user actually picks a date.
+        function toIsoDate(raw) {
+            if (!raw) return '';
+            const s = String(raw).trim();
+            if (!s) return '';
+            const pad = n => (String(n).length === 1 ? '0' + n : String(n));
+            // Already ISO
+            let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (m) return m[1] + '-' + pad(m[2]) + '-' + pad(m[3]);
+            // yyyy/m/d or yyyy/mm/dd
+            m = s.match(/^(\d{4})[\/.](\d{1,2})[\/.](\d{1,2})$/);
+            if (m) return m[1] + '-' + pad(m[2]) + '-' + pad(m[3]);
+            // m/d or mm/dd  -- legacy short form. Assume current year.
+            m = s.match(/^(\d{1,2})[\/.](\d{1,2})$/);
+            if (m) {
+                const yr = new Date().getFullYear();
+                return yr + '-' + pad(m[1]) + '-' + pad(m[2]);
+            }
+            return '';
+        }
 
         function cascadeOptionsFor(key, c) {
             if (key === 'phenomenon1') return CASCADE_DATA.phenomenon1.slice();
@@ -1718,6 +1764,38 @@
                         if (state.viewMode) return;
                         openLinkEditor(c, col.key, td);
                     });
+                } else if (col.kind === 'date') {
+                    // Native HTML5 date picker. Storage is yyyy-mm-dd (ISO),
+                    // which is also what input[type=date] requires. Legacy
+                    // "m/d" values are upgraded to yyyy-mm-dd the first time
+                    // the user opens the picker on them.
+                    td.className = 'editable date-cell';
+                    const raw = c[col.key] || '';
+                    if (state.viewMode) {
+                        td.innerHTML = '<div class="cell-text">' + escapeHtml(raw) + '</div>';
+                    } else {
+                        const iso = toIsoDate(raw);
+                        const input = document.createElement('input');
+                        input.type = 'date';
+                        input.value = iso;
+                        input.setAttribute('data-key', col.key);
+                        input.addEventListener('change', () => {
+                            const v = input.value; // browser always emits yyyy-mm-dd
+                            if (v !== c[col.key]) {
+                                c[col.key] = v;
+                                markDirty(c.id);
+                            }
+                        });
+                        // If we just upgraded a legacy short value, also flag
+                        // dirty so the user knows a save will replace "6/15"
+                        // with "2026-06-15".
+                        if (iso && iso !== raw) {
+                            c[col.key] = iso;
+                            markDirty(c.id);
+                        }
+                        td.innerHTML = '';
+                        td.appendChild(input);
+                    }
                 } else if (col.kind === 'cascade') {
                     // 3-level cascading dropdown (現象1階 -> ZE5.0 -> ZE 1階).
                     // In view-only mode just print the value as text.
@@ -3652,8 +3730,9 @@
                                 '\n→ 你的回應**必須**至少包含一個 <new-case ds="...">{...}</new-case> 區塊。' +
                                 '\n→ **禁止**只寫文字摘要、策略建議、判定規則、操作指引、欄位定義。這些都不算完成任務,只會讓使用者看不到任何卡片。' +
                                 '\n→ 即使圖中欄位跟目標 schema 看起來「對不上」,你也**必須**輸出區塊。' +
+                                '\n→ **日期欄位**(light:createDate / light:meetingUpdate / bulk:date)的值請**一律使用 yyyy-mm-dd 格式**(例:2026-06-15),不要用 yyyy/m/d 或 m/d。今天日期請參考訊息開頭給的值。' +
                                 '\n→ **欄位映射常用對照(找得到就填)**:' +
-                                '\n   時間/日期/Date → light:createDate 或 bulk:date' +
+                                '\n   時間/日期/Date → light:createDate 或 bulk:date(用 yyyy-mm-dd)' +
                                 '\n   機台/設備/EQ → light:eqpId 或 bulk:equipment' +
                                 '\n   原因/Root Cause → 兩邊都有 rootCause' +
                                 '\n   零件/Parts → 兩邊都有 parts' +
