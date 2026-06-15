@@ -581,6 +581,50 @@
         }
         /* Dark theme inverts the calendar glyph so it stays visible */
         html[data-theme="dark"] td.date-cell input.date-pick::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+        /* Multi-value cells (LotID / Qty in 少片數)
+           Each line is its own input + remove button; a + button at the
+           bottom adds a row. Storage: newline-separated string. View mode
+           just stacks the raw lines as text. */
+        td.multiline-cell .ml-wrap { display: flex; flex-direction: column; gap: 3px; min-width: 90px; }
+        td.multiline-cell .ml-row  { display: flex; gap: 3px; align-items: center; }
+        td.multiline-cell .ml-input {
+            flex: 1;
+            min-width: 60px;
+            padding: 3px 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--input-bg);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+        }
+        td.multiline-cell .ml-input:focus { border-color: var(--accent); }
+        td.multiline-cell .ml-remove {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            border-radius: 3px;
+            padding: 0 6px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            flex: none;
+        }
+        td.multiline-cell .ml-remove:hover { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+        td.multiline-cell .ml-add {
+            background: var(--tint-med);
+            border: 1px dashed var(--border);
+            color: var(--muted);
+            border-radius: 4px;
+            padding: 2px 10px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-top: 2px;
+            align-self: flex-start;
+        }
+        td.multiline-cell .ml-add:hover { background: var(--tint-high); color: var(--text); border-color: var(--accent); }
         /* contenteditable placeholder for empty cells */
         td .cell-text[data-placeholder]:empty::before {
             content: attr(data-placeholder);
@@ -1393,8 +1437,8 @@
             { key: 'generation',    label: 'Generation' },
             { key: 'owner',         label: 'owner' },
             { key: 'createDate',    label: 'Create_date',           kind: 'date' },
-            { key: 'lotId',         label: 'LotID' },
-            { key: 'qty',           label: 'Qty' },
+            { key: 'lotId',         label: 'LotID',                 kind: 'multiline' },
+            { key: 'qty',           label: 'Qty',                   kind: 'multiline' },
             { key: 'eqpId',         label: 'EqpID' },
             { key: 'reason',        label: '原因' },
             { key: 'rootCause',     label: 'Root cause' },
@@ -1896,6 +1940,78 @@
                         });
                         td.innerHTML = '';
                         td.appendChild(select);
+                    }
+                } else if (col.kind === 'multiline') {
+                    // Multi-value cell (LotID / Qty in 少片數). Each line is
+                    // its own text input with a x remove button; a + button
+                    // appends a new row. Persisted as a newline-joined string
+                    // so existing sort/filter/export paths just work.
+                    td.className = 'editable multiline-cell';
+                    const raw = c[col.key] || '';
+                    if (state.viewMode) {
+                        td.innerHTML = '<div class="cell-text">' + escapeHtml(raw).replace(/\n/g, '<br>') + '</div>';
+                    } else {
+                        const wrap = document.createElement('div');
+                        wrap.className = 'ml-wrap';
+                        // Live UI state -- keep trailing blanks until persist
+                        // strips them, so the "+ 新增" button doesn't get
+                        // immediately undone by storage normalization.
+                        let lines = String(raw).split('\n');
+                        if (lines.length === 0) lines = [''];
+
+                        const persist = () => {
+                            const trimmed = lines.slice();
+                            while (trimmed.length > 1 && trimmed[trimmed.length - 1] === '') trimmed.pop();
+                            const joined = trimmed.join('\n');
+                            if (joined !== (c[col.key] || '')) {
+                                c[col.key] = joined;
+                                markDirty(c.id);
+                            }
+                        };
+                        const render = () => {
+                            wrap.innerHTML = '';
+                            lines.forEach((line, idx) => {
+                                const row = document.createElement('div');
+                                row.className = 'ml-row';
+                                const inp = document.createElement('input');
+                                inp.type = 'text';
+                                inp.className = 'ml-input';
+                                inp.value = line;
+                                inp.setAttribute('data-key', col.key);
+                                inp.addEventListener('input', () => { lines[idx] = inp.value; });
+                                inp.addEventListener('blur', () => { lines[idx] = inp.value; persist(); });
+                                row.appendChild(inp);
+                                if (lines.length > 1) {
+                                    const del = document.createElement('button');
+                                    del.type = 'button';
+                                    del.className = 'ml-remove';
+                                    del.title = '移除這一行';
+                                    del.textContent = '×';
+                                    del.addEventListener('click', () => {
+                                        lines.splice(idx, 1);
+                                        if (lines.length === 0) lines = [''];
+                                        persist();
+                                        render();
+                                    });
+                                    row.appendChild(del);
+                                }
+                                wrap.appendChild(row);
+                            });
+                            const addBtn = document.createElement('button');
+                            addBtn.type = 'button';
+                            addBtn.className = 'ml-add';
+                            addBtn.textContent = '+ 新增';
+                            addBtn.addEventListener('click', () => {
+                                lines.push('');
+                                render();
+                                const inputs = wrap.querySelectorAll('.ml-input');
+                                if (inputs.length) inputs[inputs.length - 1].focus();
+                            });
+                            wrap.appendChild(addBtn);
+                        };
+                        render();
+                        td.innerHTML = '';
+                        td.appendChild(wrap);
                     }
                 } else {
                     td.className = 'editable';
@@ -3791,8 +3907,8 @@
                                 '\n   分類/類別 → light:category 或 bulk:category' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
                                 '\n   連結/Link → 兩邊都有 link' +
-                                '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)' +
-                                '\n   片數/Qty → light:qty(bulk 無對應就省略)' +
+                                '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)。**多個批號用 \\n 換行分開**,例如 "GTC5Q.26\\nGTC5Q.22\\nGTC5Q.29"' +
+                                '\n   片數/Qty → light:qty(bulk 無對應就省略)。**多筆對應 lotId,順序要對齊**,用 \\n 分開,例如 "1\\n1\\n1"' +
                                 '\n   缺陷類型/Defect Type → bulk:defectType(light 無對應就省略)' +
                                 '\n→ 讀不到的 key 直接省略不要寫,**但 JSON 區塊還是要出來**。寧可只有 2-3 個欄位也要輸出,絕對不能改寫成文字摘要。' +
                                 '\n\n【目標分頁判斷】' +
