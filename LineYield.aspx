@@ -537,10 +537,12 @@
         td.cascade-cell select:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.6; }
 
         /* Date-input cells (createDate / meetingUpdate in 少片數)
-           Two controls side-by-side: free-text input + 📅 button. The
-           hidden <input type=date> is only used to drive the native picker
-           when the button is pressed. */
-        td.date-cell .date-wrap { display: flex; align-items: center; gap: 4px; position: relative; }
+           Two controls side-by-side:
+             - .date-text   : free-text input for typing any format
+             - .date-pick   : a real <input type=date> styled down to JUST
+                              its calendar icon, so clicking it triggers
+                              the browser's NATIVE picker with no JS. */
+        td.date-cell .date-wrap { display: flex; align-items: stretch; gap: 4px; }
         td.date-cell input.date-text {
             flex: 1;
             min-width: 90px;
@@ -554,18 +556,31 @@
             outline: none;
         }
         td.date-cell input.date-text:focus { border-color: var(--accent); }
-        td.date-cell button.date-pick-btn {
-            background: var(--tint-med);
+        td.date-cell input.date-pick {
+            width: 34px;
+            padding: 0;
             border: 1px solid var(--border);
             border-radius: 4px;
-            padding: 3px 6px;
+            background: var(--tint-med);
+            color: var(--text);
             cursor: pointer;
-            font-size: 12px;
-            line-height: 1;
             flex: none;
+            overflow: hidden;
+            box-sizing: border-box;
         }
-        td.date-cell button.date-pick-btn:hover { background: var(--tint-high); border-color: var(--accent); }
-        td.date-cell input.date-hidden { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+        td.date-cell input.date-pick:hover { background: var(--tint-high); border-color: var(--accent); }
+        /* Hide the date text part of input[type=date]; keep only the icon */
+        td.date-cell input.date-pick::-webkit-datetime-edit         { display: none; }
+        td.date-cell input.date-pick::-webkit-inner-spin-button     { display: none; }
+        td.date-cell input.date-pick::-webkit-clear-button          { display: none; }
+        td.date-cell input.date-pick::-webkit-calendar-picker-indicator {
+            width: 28px; height: 28px;
+            opacity: 0.75;
+            cursor: pointer;
+            margin: 0;
+        }
+        /* Dark theme inverts the calendar glyph so it stays visible */
+        html[data-theme="dark"] td.date-cell input.date-pick::-webkit-calendar-picker-indicator { filter: invert(1); }
         /* contenteditable placeholder for empty cells */
         td .cell-text[data-placeholder]:empty::before {
             content: attr(data-placeholder);
@@ -1775,11 +1790,12 @@
                         openLinkEditor(c, col.key, td);
                     });
                 } else if (col.kind === 'date') {
-                    // Hybrid: a free-text input (so the user can still type
-                    // legacy "m/d" or paste any string) PLUS a 📅 button that
-                    // opens the native date picker for when they prefer to
-                    // click. Both write to the same c[col.key]; text blur
-                    // normalizes via toIsoDate() when the value parses.
+                    // Hybrid: a free-text input (so users can keep typing
+                    // "6/15" / "2026/6/15") PLUS a real <input type=date>
+                    // sitting next to it, CSS-trimmed down to just its
+                    // calendar icon. Clicking the icon opens the browser's
+                    // native picker directly -- no JS triggering needed,
+                    // which is what kept failing before.
                     td.className = 'editable date-cell';
                     const raw = c[col.key] || '';
                     if (state.viewMode) {
@@ -1795,20 +1811,16 @@
                         text.placeholder = 'yyyy-mm-dd';
                         text.setAttribute('data-key', col.key);
 
-                        const pickBtn = document.createElement('button');
-                        pickBtn.type = 'button';
-                        pickBtn.className = 'date-pick-btn';
-                        pickBtn.title = '開啟月曆';
-                        pickBtn.textContent = '📅';
+                        // Real native date input, styled as a tiny icon
+                        // button via CSS. Click = native picker.
+                        const pick = document.createElement('input');
+                        pick.type = 'date';
+                        pick.className = 'date-pick';
+                        pick.title = '開啟月曆';
+                        pick.value = toIsoDate(raw);
 
-                        // Hidden native date input drives the picker.
-                        const hidden = document.createElement('input');
-                        hidden.type = 'date';
-                        hidden.className = 'date-hidden';
-                        hidden.value = toIsoDate(raw);
-
-                        // Text blur: write whatever the user typed, normalize
-                        // to ISO if we can parse it, otherwise keep raw.
+                        // Text blur: keep what user typed, normalize when
+                        // parseable, mark dirty on actual value change.
                         text.addEventListener('blur', () => {
                             const v = text.value.trim();
                             const iso = toIsoDate(v);
@@ -1818,25 +1830,13 @@
                                 markDirty(c.id);
                             }
                             if (iso) text.value = iso;
-                            hidden.value = iso;
+                            pick.value = iso || '';
                         });
 
-                        // Picker button: sync hidden input value from current
-                        // text, then open the picker (modern showPicker, with
-                        // a click() fallback for older browsers).
-                        pickBtn.addEventListener('click', () => {
-                            hidden.value = toIsoDate(text.value) || new Date().toISOString().slice(0,10);
-                            try {
-                                if (typeof hidden.showPicker === 'function') hidden.showPicker();
-                                else hidden.click();
-                            } catch (e) {
-                                hidden.click();
-                            }
-                        });
-
-                        // Picker change: copy back into text + save.
-                        hidden.addEventListener('change', () => {
-                            const v = hidden.value;
+                        // Picker change: write through to the row + sync
+                        // the text input so both controls always agree.
+                        pick.addEventListener('change', () => {
+                            const v = pick.value; // yyyy-mm-dd
                             if (v && v !== c[col.key]) {
                                 c[col.key] = v;
                                 text.value = v;
@@ -1845,8 +1845,7 @@
                         });
 
                         wrap.appendChild(text);
-                        wrap.appendChild(pickBtn);
-                        wrap.appendChild(hidden);
+                        wrap.appendChild(pick);
                         td.innerHTML = '';
                         td.appendChild(wrap);
                     }
