@@ -2353,7 +2353,7 @@
             try {
                 const peek = await res.clone().json();
                 if (peek && peek.ok === false && peek.error === 'needLogin') {
-                    performLogout('登入逾期,請重新登入');
+                    performLogout('登入逾期,請重新登入', { preserveData: true });
                 }
             } catch (e) { /* not JSON; ignore */ }
             return res;
@@ -2373,7 +2373,21 @@
         }
 
         // ---- Logout (manual button + 5-min idle auto) ----
-        function performLogout(reason) {
+        // performLogout(reason, opts)
+        //   opts.preserveData = true  -> involuntary logout (token expired
+        //                                mid-action). Keep state.cases /
+        //                                dirtyIds / deletedIds so the user
+        //                                does NOT lose unsaved edits. After
+        //                                the re-login modal closes we run
+        //                                reloadFromServer which merges the
+        //                                preserved dirty rows with the fresh
+        //                                server data.
+        //   opts.preserveData = false (default) -> manual logout. Wipe state
+        //                                so a closed session can't be peeked
+        //                                via dev tools.
+        function performLogout(reason, opts) {
+            opts = opts || {};
+            const preserve = !!opts.preserveData;
             try {
                 sessionStorage.removeItem('defectLL.authUser');
                 sessionStorage.removeItem('defectLL.authToken');
@@ -2385,19 +2399,30 @@
             try { localStorage.setItem('defectLL.viewMode', '1'); } catch (e) {}
             state.pendingImageCell = null;
             clearPasteHighlight();
-            // Wipe the in-memory cases so a closed session can't be peeked
-            // at via dev tools after logout. Reload happens on next login.
-            state.cases = [];
-            state.loadedIds = new Set();
-            state.dirtyIds.clear();
-            state.deletedIds.clear();
-            state.aiFilterIds = null;
+            if (!preserve) {
+                state.cases = [];
+                state.loadedIds = new Set();
+                state.dirtyIds.clear();
+                state.deletedIds.clear();
+                state.aiFilterIds = null;
+            }
             renderAll();
             updateModeToggleLabel();
             if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
             if (reason) setStatus(reason, 'dirty');
-            // Drop straight back into the required-login gate.
-            openLogin(() => loadData(), { required: true });
+            // After re-login, merge with server (preserve mode) or do a clean
+            // load (wipe mode).
+            openLogin(() => {
+                if (preserve && typeof reloadFromServer === 'function') {
+                    reloadFromServer().then(() => {
+                        if (state.dirtyIds.size + state.deletedIds.size > 0) {
+                            setStatus('登入完成,你還有未儲存的變更,請再按一次儲存', 'dirty');
+                        }
+                    });
+                } else {
+                    loadData();
+                }
+            }, { required: true });
         }
         document.getElementById('btnLogout').addEventListener('click', () => {
             if (state.dirtyIds.size + state.deletedIds.size > 0) {
@@ -2644,7 +2669,14 @@
                 await reloadFromServer({ silent: true });
                 markSaved();
             } catch (e) {
-                setStatus('儲存失敗: ' + e.message, 'error');
+                // If the failure was the session-expiry path, the login modal
+                // is already up and the dirty rows are still in memory thanks
+                // to performLogout's preserveData branch -- guide the user.
+                if (/needLogin/i.test(e.message)) {
+                    setStatus('登入逾期,請在登入視窗重新登入後再次按儲存', 'error');
+                } else {
+                    setStatus('儲存失敗: ' + e.message, 'error');
+                }
             }
         }
 
