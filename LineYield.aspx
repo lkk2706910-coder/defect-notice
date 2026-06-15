@@ -3623,14 +3623,18 @@
                 // and render an inline preview card instead.
                 let display = text;
                 if (role === 'assistant' && !cls) {
-                    display = text.replace(/<new-case(?:\s+ds=["']?\w+["']?)?\s*>[\s\S]*?<\/new-case>/gi, '').trim();
-                    if (!display) display = '(已建議新增 case,請看下方卡片)';
+                    display = text
+                        .replace(/<new-case(?:\s+ds=["']?\w+["']?)?\s*>[\s\S]*?<\/new-case>/gi, '')
+                        .replace(/<edit-case\b[^>]*>[\s\S]*?<\/edit-case>/gi, '')
+                        .trim();
+                    if (!display) display = '(已建議變更,請看下方卡片)';
                 }
                 div.textContent = display;
                 msgs.appendChild(div);
                 if (role === 'assistant' && !cls) {
                     appendCaseRefsToolbar(text);
                     extractNewCases(text).forEach(obj => appendNewCaseCard(obj));
+                    extractEditCases(text).forEach(obj => appendEditCaseCard(obj));
                 }
                 msgs.scrollTop = msgs.scrollHeight;
                 return div;
@@ -3781,6 +3785,114 @@
                     }
                 });
                 dismissBtn.addEventListener('click', () => card.remove());
+
+                msgs.appendChild(card);
+                msgs.scrollTop = msgs.scrollHeight;
+            }
+            // Parse <edit-case id="..." ds="...">{...}</edit-case> blocks. Returns
+            // { id, ds, fields } per block. id and ds attributes are required;
+            // ds defaults to current dataset when missing.
+            function extractEditCases(text) {
+                const out = [];
+                const re = /<edit-case\b([^>]*)>\s*([\s\S]*?)\s*<\/edit-case>/gi;
+                let m;
+                while ((m = re.exec(text)) !== null) {
+                    const attrs = m[1] || '';
+                    const idMatch = attrs.match(/\bid\s*=\s*["']?([^"'\s>]+)["']?/i);
+                    const dsMatch = attrs.match(/\bds\s*=\s*["']?(\w+)["']?/i);
+                    if (!idMatch) continue;
+                    let ds = (dsMatch ? dsMatch[1] : '').toLowerCase();
+                    if (ds !== 'light' && ds !== 'bulk') ds = state.currentDataset;
+                    try {
+                        const fields = JSON.parse(m[2]);
+                        if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
+                            out.push({ id: idMatch[1], ds: ds, fields: fields });
+                        }
+                    } catch (e) { /* malformed JSON -- skip silently */ }
+                }
+                return out;
+            }
+            // Render a "preview + 套用" card for one AI-suggested case edit.
+            // Shows old -> new for each field so the user can confirm before
+            // applying. Same-dataset edits update state.cases (mark dirty);
+            // cross-dataset edits are blocked with a hint to switch tabs.
+            function appendEditCaseCard(entry) {
+                const ds = entry.ds || state.currentDataset;
+                const isCrossDataset = ds !== state.currentDataset;
+                const target = state.cases.find(c => c.id === entry.id);
+                const dsLabel = ds === 'bulk' ? 'Lesson Learn' : 'Line Yield';
+
+                const card = document.createElement('div');
+                card.className = 'ai-newcase-card';
+                const title = document.createElement('div');
+                title.className = 'ai-newcase-title';
+                const n = target ? (state.cases.indexOf(target) + 1) : null;
+                title.textContent = 'AI 建議修改 case' + (n ? '  [#' + n + ']' : '') + '  →  ' + dsLabel;
+                card.appendChild(title);
+
+                const fields = document.createElement('div');
+                fields.className = 'ai-newcase-fields';
+                Object.keys(entry.fields).forEach(k => {
+                    const row = document.createElement('div');
+                    const key = document.createElement('span');
+                    key.className = 'ai-newcase-key';
+                    key.textContent = k + ':';
+                    row.appendChild(key);
+                    const oldVal = target ? (target[k] || '') : '';
+                    const newVal = entry.fields[k];
+                    const text = (oldVal ? String(oldVal) : '(空)') + '  →  ' + (newVal === '' ? '(清空)' : String(newVal));
+                    row.appendChild(document.createTextNode(text));
+                    fields.appendChild(row);
+                });
+                card.appendChild(fields);
+
+                const actions = document.createElement('div');
+                actions.className = 'ai-newcase-actions';
+                const applyBtn = document.createElement('button');
+                applyBtn.type = 'button';
+                applyBtn.className = 'ai-newcase-add';
+                const dismissBtn = document.createElement('button');
+                dismissBtn.type = 'button';
+                dismissBtn.className = 'ai-newcase-dismiss';
+                dismissBtn.textContent = '忽略';
+
+                if (isViewer()) {
+                    applyBtn.textContent = '無權限編輯';
+                    applyBtn.disabled = true;
+                } else if (!target) {
+                    applyBtn.textContent = isCrossDataset
+                        ? '請切到 ' + dsLabel + ' 分頁'
+                        : '找不到對應 case';
+                    applyBtn.disabled = true;
+                } else {
+                    applyBtn.textContent = state.viewMode ? '切到編輯並套用' : '套用變更';
+                }
+
+                const doApply = () => {
+                    if (state.viewMode) enterEditMode();
+                    Object.keys(entry.fields).forEach(k => {
+                        target[k] = entry.fields[k] == null ? '' : String(entry.fields[k]);
+                    });
+                    state.dirtyIds.add(target.id);
+                    state.dirty = true;
+                    renderAll();
+                    const cnt = state.dirtyIds.size + state.deletedIds.size;
+                    setStatus(cnt > 0 ? ('有 ' + cnt + ' 筆未儲存') : '已套用變更', 'dirty');
+                    applyBtn.textContent = '✓ 已套用,記得按儲存';
+                    applyBtn.disabled = true;
+                    dismissBtn.style.display = 'none';
+                };
+
+                applyBtn.addEventListener('click', () => {
+                    if (applyBtn.disabled) return;
+                    if (state.viewMode && !getAuthUser()) { openLogin(doApply); return; }
+                    doApply();
+                });
+                dismissBtn.addEventListener('click', () => card.remove());
+
+                actions.appendChild(applyBtn);
+                actions.appendChild(dismissBtn);
+                card.appendChild(actions);
 
                 msgs.appendChild(card);
                 msgs.scrollTop = msgs.scrollHeight;
@@ -4159,6 +4271,20 @@
                                 '\n【規則 B - 引用既有 case】' +
                                 '\n=============================================' +
                                 '\n引用任何既有 case 時,**必須**使用 [#N] 格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」。' +
+                                '\n\n=============================================' +
+                                '\n【規則 B2 - 修改既有 case 的欄位 (最高優先,違反 = 失敗)】' +
+                                '\n=============================================' +
+                                '\n若使用者句子裡出現以下任一關鍵字:' +
+                                '「修改」「改成」「更新」「編輯」「改一下」「改掉」「填上」「補上」「把 [#N] 的 ... 改」「edit」「update」「modify」「change」' +
+                                '\n→ 你的回應**必須**至少包含一個 <edit-case id="..." ds="...">{...}</edit-case> 區塊。' +
+                                '\n→ id 用上面 case 列表中「id=...」那串完整字串(不是 [#N]);ds 用該 case 所屬的分頁(從上下文判斷,通常就是當前分頁)。' +
+                                '\n→ JSON 內**只包含要改的欄位**,其他欄位不要寫,保持簡潔。' +
+                                '\n→ **禁止**改用 <new-case>(那會建立新 case 不是修改);也禁止只寫文字「我會幫你改...」而不輸出 <edit-case> 區塊。' +
+                                '\n→ 多筆要改就輸出多個 <edit-case> 區塊。' +
+                                '\n【範例 - 使用者說「把 [#5] 的 EqpID 改成 ULKCVD-B05」】' +
+                                '\n<edit-case id="abc-123-uuid-of-case-5" ds="light">' +
+                                '\n{"eqpId": "ULKCVD-B05"}' +
+                                '\n</edit-case>' +
                                 '\n\n=============================================' +
                                 '\n【規則 C - 單張圖片(非表格)且使用者沒說要新增】' +
                                 '\n=============================================' +
