@@ -240,10 +240,16 @@
            into the wrapper -- that's what kept the rightmost column
            (the delete button) off-screen and unreachable on narrow
            viewports. The wrapper's overflow:auto then provides
-           horizontal scroll. */
+           horizontal scroll. min-widths are picked so the bulk schema
+           (~17 text cols + 2 image cols) reliably overflows on a 1080p
+           monitor at 100% zoom; raise them if a future, wider monitor
+           still fits everything. */
         table.cases th, table.cases td { white-space: normal; }
-        table.cases td.editable { min-width: 110px; }
-        table.cases td.actions  { min-width: 70px; white-space: nowrap; }
+        table.cases td.editable  { min-width: 140px; }
+        table.cases td.link-cell { min-width: 140px; }
+        table.cases td.img-cell  { min-width: 190px; }
+        table.cases td.actions   { min-width: 70px;  white-space: nowrap; position: sticky; right: 0; background: var(--panel); z-index: 2; }
+        table.cases th:last-child { position: sticky; right: 0; background: var(--panel-elevated); z-index: 3; }
         table.cases th, table.cases td {
             border: 1px solid var(--border);
             padding: 6px 8px;
