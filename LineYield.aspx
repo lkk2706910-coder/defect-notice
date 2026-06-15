@@ -1432,8 +1432,8 @@
         // Line Yield:no image columns, Link is the multi-URL editor,
         // every other column is plain text input.
         const COLUMNS_LIGHT = [
-            { key: 'eqpType',       label: 'Eqptype' },
-            { key: 'entity',        label: 'Entity' },
+            { key: 'eqpType',       label: 'Eqptype',               kind: 'cascade' },
+            { key: 'entity',        label: 'Entity',                kind: 'cascade' },
             { key: 'parts',         label: 'Parts' },
             { key: 'finalAction',   label: 'Final_Action' },
             { key: 'link',          label: 'Link',                  kind: 'link' },
@@ -1441,7 +1441,7 @@
             { key: 'createDate',    label: 'Create_date',           kind: 'date' },
             { key: 'lotId',         label: 'LotID',                 kind: 'multiline' },
             { key: 'qty',           label: 'Qty',                   kind: 'multiline' },
-            { key: 'eqpId',         label: 'EqpID' },
+            { key: 'eqpId',         label: 'EqpID',                 kind: 'cascade' },
             { key: 'reason',        label: '原因' },
             { key: 'rootCause',     label: 'Root cause' },
             { key: 'phenomenon1',   label: '現象1階',              kind: 'cascade' },
@@ -1558,7 +1558,60 @@
             }
         };
 
-        // Normalize any saved date string into the ISO yyyy-mm-dd format
+        // EqpType -> Entity -> EqpID (Tool) cascade for Line Yield.
+        // Selecting an EqpType narrows the Entity dropdown; selecting an
+        // Entity narrows the EqpID (Tool) dropdown. Build the reverse
+        // (tool -> entity, entity -> eqpType) index at load so users who
+        // type the tool in directly still get the parent fields populated.
+        const EQP_DATA = {
+            tools: {
+                'ALDOX|ALDOX':           ['ALDOX-B01'],
+                'APF|APF':               ['APF-B01', 'APF-B02'],
+                'APF|NISA_APFSR':        ['APF-B03'],
+                'BLOKCVD|BLOKCVD_HET':   ['BLOKCVD-B01','BLOKCVD-B02','BLOKCVD-B03','BLOKCVD-B04','BLOKCVD-B05','BLOKCVD-B06'],
+                'CULKCVD|CULKCVD':       ['CULKCVD-B01'],
+                'CUSILPE|CUSILPE_NDC':   ['CUSILPE-B01','CUSILPE-B02','CUSILPE-B03','CUSILPE-B15','CUSILPE-B16','CUSILPE-B17','CUSILPE-B18','CUSILPE-B19','CUSILPE-B20','CUSILPE-B21'],
+                'CUSILPE|CUSILPE_PEOX':  ['CUSILPE-B06','CUSILPE-B10','CUSILPE-B12'],
+                'CUSILPE|CUSILPE_SIN':   ['CUSILPE-B22','SILPE-B01','SILPE-B02'],
+                'CUSILPE|CUSILPE_SION':  ['CUSILPE-B04','CUSILPE-B05','CUSILPE-B07','CUSILPE-B08','CUSILPE-B11','CUSILPE-B13','CUSILPE-B14','CUSILPE-B24','CUSILPE-B25','CUSILPE-B26','CUSILPE-B27','CUSILPE-B28','CUSILPE-B30','CUSILPE-B31','CUSILPE-B33'],
+                'CUSILPE|SILPE_HCSIN':   ['CUSILPE-B09'],
+                'CUSILPE|SILPE_PADSIN':  ['CUSILPE-B23','CUSILPE-B29'],
+                'DARC|DARC':             ['DARC-B01','DARC-B02','DARC-B03','DARC-B04','DARC-B05','DARC-B06','DARC-B07','DARC-B08','DARC-B09'],
+                'HBWFBOND|HBWFBOND':     ['HBWFBOND-B01','HBWFBOND-B81'],
+                'HKG|HKG_GH':            ['HKG-B01','HKG-B02','HKG-B03','HKG-B04','HKG-B05','HKG-B06','HKG-B07','HKG-B08'],
+                'NISACVD|NISA_SIN':      ['NISACVD-B01','NISACVD-B06','NISACVD-B07','NISACVD-B08'],
+                'NISACVD|NISA_SIN4D4C':  ['NISACVD-B02','NISACVD-B04','NISACVD-B05','NISACVD-B09','NISACVD-B10','NISACVD-B11'],
+                'NISACVD|NISA_USG':      ['NISACVD-B03','NISACVD-B12','NISACVD-B13','NISACVD-B14'],
+                'OXSE|OXSE':             ['OXSE-A01','OXSE-B01','OXSE-B02'],
+                'SACVD|SACVD_HARP':      ['SACVD-B01','SACVD-B04','SACVD-B06','SACVD-B08','SACVD-B09','SACVD-B10'],
+                'SACVD|SACVD_SA':        ['SACVD-B02','SACVD-B11','SACVD-B12','SACVD-B81'],
+                'SACVD|SACVD_SMT':       ['SACVD-B03','SACVD-B05','SACVD-B07'],
+                'SILPE|SILPE_PADSG':     ['SILPE-B03'],
+                'TEOSPE|TEOSPE_AL':      ['TEOSPE-B01','TEOSPE-B03','TEOSPE-B08','TEOSPE-B12'],
+                'TEOSPE|TEOSPE_CU':      ['TEOSPE-B02','TEOSPE-B04','TEOSPE-B05','TEOSPE-B06','TEOSPE-B07','TEOSPE-B09','TEOSPE-B11'],
+                'ULKCVD|ULKCVD_DEP':     ['ULKCVD-B01','ULKCVD-B02','ULKCVD-B03','ULKCVD-B04','ULKCVD-B05','ULKCVD-B06','ULKCVD-B07','ULKCVD-B08','ULKCVD-B09','ULKCVD-B10','ULKCVD-B11','ULKCVD-B12','ULKCVD-B13'],
+                'ULKCVD|ULKCVD_CUR':     ['ULKCVD-B31','ULKCVD-B32','ULKCVD-B33','ULKCVD-B35','ULKCVD-B36','ULKCVD-B37','ULKCVD-B38']
+            }
+        };
+        // Build derived indexes (parent lists + reverse lookup) once.
+        (function buildEqpIndexes() {
+            const typeSet = [];
+            const entitiesByType = {};
+            const toolToParent = {};
+            Object.keys(EQP_DATA.tools).forEach(combo => {
+                const parts = combo.split('|');
+                const t = parts[0], e = parts[1];
+                if (typeSet.indexOf(t) < 0) typeSet.push(t);
+                if (!entitiesByType[t]) entitiesByType[t] = [];
+                if (entitiesByType[t].indexOf(e) < 0) entitiesByType[t].push(e);
+                EQP_DATA.tools[combo].forEach(tool => {
+                    toolToParent[tool] = { eqpType: t, entity: e };
+                });
+            });
+            EQP_DATA.eqpTypes = typeSet;
+            EQP_DATA.entities = entitiesByType;
+            EQP_DATA.toolToParent = toolToParent;
+        })();
         // that <input type="date"> requires. Old "m/d" / "mm/dd" entries
         // get the current year prepended so the picker can show something
         // sensible -- the new value is then re-saved in full ISO once the
@@ -1593,6 +1646,17 @@
                 const p1 = c.phenomenon1 || '';
                 const p2 = c.ze50 || '';
                 return (CASCADE_DATA.ze1[p1 + '|' + p2] || []).slice();
+            }
+            // EqpType -> Entity -> EqpID chain.
+            if (key === 'eqpType') return EQP_DATA.eqpTypes.slice();
+            if (key === 'entity') {
+                const t = c.eqpType || '';
+                return (EQP_DATA.entities[t] || []).slice();
+            }
+            if (key === 'eqpId') {
+                const t = c.eqpType || '';
+                const e = c.entity || '';
+                return (EQP_DATA.tools[t + '|' + e] || []).slice();
             }
             return [];
         }
@@ -1931,6 +1995,18 @@
                             // doesn't survive.
                             if (col.key === 'phenomenon1') { c.ze50 = ''; c.ze1 = ''; }
                             else if (col.key === 'ze50')   { c.ze1 = ''; }
+                            else if (col.key === 'eqpType') { c.entity = ''; c.eqpId = ''; }
+                            else if (col.key === 'entity')  { c.eqpId = ''; }
+                            else if (col.key === 'eqpId') {
+                                // Picking a tool back-fills its parents so the
+                                // user doesn't have to set EqpType/Entity first
+                                // (and so the row is always internally consistent).
+                                const parent = EQP_DATA.toolToParent[select.value];
+                                if (parent) {
+                                    c.eqpType = parent.eqpType;
+                                    c.entity  = parent.entity;
+                                }
+                            }
                             markDirty(c.id);
                             // Re-render the row so the dependent dropdowns pick
                             // up their new option lists.
@@ -3899,9 +3975,24 @@
                                 '\n→ **日期欄位**(light:createDate / bulk:date)的值請**一律使用 yyyy-mm-dd 格式**(例:2026-06-15),不要用 yyyy/m/d 或 m/d。今天日期請參考訊息開頭給的值。' +
                                 '\n→ **欄位映射常用對照(找得到就填)**:' +
                                 '\n   時間/日期/Date → light:createDate 或 bulk:date(用 yyyy-mm-dd)' +
-                                '\n   機台/設備/EQ → light:eqpId 或 bulk:equipment' +
+                                '\n   機台/設備/EQ/Tool → light:eqpId 或 bulk:equipment' +
                                 '\n   機台類型/Eqp type/Tool type → light:eqpType(bulk 無對應就省略)' +
                                 '\n   Entity/廠別/區域 → light:entity(bulk 無對應就省略)' +
+                                '\n   **light 三欄的對應關係(EqpType → Entity → EqpID)是固定的**,若使用者只給 eqpId(如 "ULKCVD-B05"),你應該依下表自動補上 eqpType 與 entity;若三個都給,請用使用者提供的值。對照如下:' +
+                                '\n     ALDOX-B01 → ALDOX/ALDOX; APF-B01..B02 → APF/APF; APF-B03 → APF/NISA_APFSR;' +
+                                '\n     BLOKCVD-B01..B06 → BLOKCVD/BLOKCVD_HET; CULKCVD-B01 → CULKCVD/CULKCVD;' +
+                                '\n     CUSILPE-B01..B03/B15..B21 → CUSILPE/CUSILPE_NDC; CUSILPE-B06/B10/B12 → CUSILPE/CUSILPE_PEOX;' +
+                                '\n     CUSILPE-B22 與 SILPE-B01/B02 → CUSILPE/CUSILPE_SIN;' +
+                                '\n     CUSILPE-B04/B05/B07/B08/B11/B13/B14/B24..B28/B30/B31/B33 → CUSILPE/CUSILPE_SION;' +
+                                '\n     CUSILPE-B09 → CUSILPE/SILPE_HCSIN; CUSILPE-B23/B29 → CUSILPE/SILPE_PADSIN;' +
+                                '\n     DARC-B01..B09 → DARC/DARC; HBWFBOND-B01/B81 → HBWFBOND/HBWFBOND;' +
+                                '\n     HKG-B01..B08 → HKG/HKG_GH;' +
+                                '\n     NISACVD-B01/B06..B08 → NISACVD/NISA_SIN; NISACVD-B02/B04/B05/B09..B11 → NISACVD/NISA_SIN4D4C; NISACVD-B03/B12..B14 → NISACVD/NISA_USG;' +
+                                '\n     OXSE-A01/B01/B02 → OXSE/OXSE;' +
+                                '\n     SACVD-B01/B04/B06/B08..B10 → SACVD/SACVD_HARP; SACVD-B02/B11/B12/B81 → SACVD/SACVD_SA; SACVD-B03/B05/B07 → SACVD/SACVD_SMT;' +
+                                '\n     SILPE-B03 → SILPE/SILPE_PADSG;' +
+                                '\n     TEOSPE-B01/B03/B08/B12 → TEOSPE/TEOSPE_AL; TEOSPE-B02/B04..B07/B09/B11 → TEOSPE/TEOSPE_CU;' +
+                                '\n     ULKCVD-B01..B13 → ULKCVD/ULKCVD_DEP; ULKCVD-B31..B33/B35..B38 → ULKCVD/ULKCVD_CUR.' +
                                 '\n   原因/Root Cause → 兩邊都有 rootCause' +
                                 '\n   零件/Parts → 兩邊都有 parts' +
                                 '\n   分類/類別 → bulk:category(light 無對應就省略)' +
