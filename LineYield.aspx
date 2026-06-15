@@ -2971,7 +2971,7 @@
                 addBtn.type = 'button';
                 addBtn.className = 'ai-newcase-add';
                 if (isViewer()) {
-                    addBtn.textContent = '僅閱讀,無法加入';
+                    addBtn.textContent = '無權限編輯';
                     addBtn.disabled = true;
                 } else {
                     addBtn.textContent = state.viewMode ? '切到編輯並加入' : '加入表格';
@@ -3358,8 +3358,20 @@
                     const data = await res.json();
                     typing.remove();
                     if (!res.ok || data.ok === false) {
-                        const err = (data && (data.error || data.detail)) || ('HTTP ' + res.status);
-                        appendMessage('assistant', '錯誤: ' + err, 'error');
+                        // Translate server-side error codes into Chinese the
+                        // user can act on. "needLogin" specifically does NOT
+                        // mean "you lack edit role" -- it means the session
+                        // token was lost (e.g. IIS recycled) and the user
+                        // needs to authenticate again.
+                        let msg;
+                        if (data && data.error === 'needLogin') {
+                            msg = 'Session 已過期,請重新登入後再試一次';
+                        } else if (data && data.error === 'readonly') {
+                            msg = '您的帳號沒有編輯權限,無法執行此操作';
+                        } else {
+                            msg = (data && (data.error || data.detail)) || ('HTTP ' + res.status);
+                        }
+                        appendMessage('assistant', '錯誤: ' + msg, 'error');
                         // Drop the failed user turn so the next attempt starts clean
                         s.history.pop();
                         saveSessions();
