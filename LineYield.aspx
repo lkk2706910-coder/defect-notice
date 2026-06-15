@@ -1593,11 +1593,13 @@
                 'ULKCVD|ULKCVD_CUR':     ['ULKCVD-B31','ULKCVD-B32','ULKCVD-B33','ULKCVD-B35','ULKCVD-B36','ULKCVD-B37','ULKCVD-B38']
             }
         };
-        // Build derived indexes (parent lists + reverse lookup) once.
+        // Build derived indexes (parent lists + reverse lookup + flat
+        // tool list) once.
         (function buildEqpIndexes() {
             const typeSet = [];
             const entitiesByType = {};
             const toolToParent = {};
+            const allTools = [];
             Object.keys(EQP_DATA.tools).forEach(combo => {
                 const parts = combo.split('|');
                 const t = parts[0], e = parts[1];
@@ -1606,11 +1608,13 @@
                 if (entitiesByType[t].indexOf(e) < 0) entitiesByType[t].push(e);
                 EQP_DATA.tools[combo].forEach(tool => {
                     toolToParent[tool] = { eqpType: t, entity: e };
+                    if (allTools.indexOf(tool) < 0) allTools.push(tool);
                 });
             });
             EQP_DATA.eqpTypes = typeSet;
             EQP_DATA.entities = entitiesByType;
             EQP_DATA.toolToParent = toolToParent;
+            EQP_DATA.allTools = allTools;
         })();
         // that <input type="date"> requires. Old "m/d" / "mm/dd" entries
         // get the current year prepended so the picker can show something
@@ -1654,9 +1658,23 @@
                 return (EQP_DATA.entities[t] || []).slice();
             }
             if (key === 'eqpId') {
+                // Allow the user to pick the tool first: when no parents
+                // are set, list every tool; when EqpType is set but Entity
+                // is empty, list all tools under that EqpType; when both
+                // are set, list only the matching tools. In every case the
+                // change handler back-fills EqpType + Entity from the
+                // chosen tool so the row stays consistent.
                 const t = c.eqpType || '';
                 const e = c.entity || '';
-                return (EQP_DATA.tools[t + '|' + e] || []).slice();
+                if (t && e) return (EQP_DATA.tools[t + '|' + e] || []).slice();
+                if (t) {
+                    const acc = [];
+                    (EQP_DATA.entities[t] || []).forEach(ent => {
+                        (EQP_DATA.tools[t + '|' + ent] || []).forEach(tool => acc.push(tool));
+                    });
+                    return acc;
+                }
+                return EQP_DATA.allTools.slice();
             }
             return [];
         }
