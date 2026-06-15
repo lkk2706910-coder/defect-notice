@@ -3309,9 +3309,31 @@
                     const ctx = buildCasesContext();
                     const messages = [];
                     if (ctx) {
+                        // Build the column-key list from the *currently active*
+                        // schema so the LLM's <new-case> JSON uses the right
+                        // keys for whichever dataset (少片數 / 大宗) the user
+                        // is on; otherwise AI would always emit the bulk keys
+                        // and the add-card UI would render with the wrong fields.
+                        const editableKeys = COLUMNS.filter(c => c.kind !== 'img').map(c => c.key);
+                        const exampleKeys  = editableKeys.slice(0, 6);
+                        const exampleJson  = '{\n' + exampleKeys.map(k => '  "' + k + '": "..."').join(',\n') + '\n}';
+                        const datasetLabel = state.currentDataset === 'bulk' ? '大宗報廢' : '少片數報廢';
                         messages.push({
                             role: 'system',
-                            content: '今天日期: ' + (new Date().toISOString().slice(0,10).replace(/-/g, '/')) + '\n\n以下是目前頁面上所有 defect lesson learn case 的最新內容(含未儲存的本地修改)。回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。\n\n【格式規定 1 - 引用】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。\n\n【格式規定 2 - 新增 case】若使用者要新增 case(關鍵字:「幫我新增」、「加一筆」、「記錄一下」、「請建立」等),除了一般回應外,**請額外**用以下標記夾一段 JSON,讓使用者可以一鍵加入表格:\n\n<new-case>\n{\n  "date": "yyyy/m/d",\n  "category": "...",\n  "defectType": "...",\n  "rootCause": "...",\n  "parts": "...",\n  "equipment": "...",\n  "position": "..."\n}\n</new-case>\n\n可用的欄位 key(嚴格使用以下英文拼寫,不知道的請省略不要編造):\n- date, category, link, parts, rootCause, entityRecipe, equipment, impact, generation, productModel, defectType, map, edx, waferTrend, position, other\n\n可以放多個 <new-case>...</new-case> 區塊(每塊一筆),代表多筆建議。\n\n【若使用者上傳圖片】請先描述圖片中的 defect 特徵(位置、形狀、分布、顏色等),再從上面 case 的文字欄位推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
+                            content:
+                                '今天日期: ' + (new Date().toISOString().slice(0,10).replace(/-/g, '/')) +
+                                '\n\n目前頁面在【' + datasetLabel + '】分頁。以下是這個分頁所有 case 的最新內容(含未儲存的本地修改)。' +
+                                '回答問題時請只依據這些資料,如果資料中沒有就直接說「資料中沒有」,不要編造。' +
+                                '\n\n【格式規定 1 - 引用】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),' +
+                                '不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。' +
+                                '\n\n【格式規定 2 - 新增 case】若使用者要新增 case(關鍵字:「幫我新增」、「加一筆」、' +
+                                '「記錄一下」、「請建立」等),除了一般回應外,**請額外**用以下標記夾一段 JSON,讓使用者可以一鍵加入表格:' +
+                                '\n\n<new-case>\n' + exampleJson + '\n</new-case>' +
+                                '\n\n可用的欄位 key(嚴格使用以下英文拼寫,不知道的請省略不要編造):\n- ' +
+                                editableKeys.join(', ') +
+                                '\n\n可以放多個 <new-case>...</new-case> 區塊(每塊一筆),代表多筆建議。' +
+                                '\n\n【若使用者上傳圖片】請先描述圖片內容,再從上面 case 的文字欄位推測哪幾筆最可能相關,' +
+                                '並依相關度由高到低列出 [#N] 並說明判斷依據。\n\n' + ctx
                         });
                     }
                     // dHash-detected near-duplicates: tell the LLM in a SEPARATE
