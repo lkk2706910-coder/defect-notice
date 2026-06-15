@@ -2906,7 +2906,7 @@
                 // and render an inline preview card instead.
                 let display = text;
                 if (role === 'assistant' && !cls) {
-                    display = text.replace(/<new-case>[\s\S]*?<\/new-case>/gi, '').trim();
+                    display = text.replace(/<new-case(?:\s+ds=["']?\w+["']?)?\s*>[\s\S]*?<\/new-case>/gi, '').trim();
                     if (!display) display = '(已建議新增 case,請看下方卡片)';
                 }
                 div.textContent = display;
@@ -2918,28 +2918,42 @@
                 msgs.scrollTop = msgs.scrollHeight;
                 return div;
             }
-            // Parse <new-case>{...}</new-case> blocks the assistant inserts when
-            // the user asks to add a row. JSON inside; defensive on malformed.
+            // Parse <new-case ds="...">{...}</new-case> blocks. The optional
+            // ds="" attribute lets the LLM target a specific dataset (light /
+            // bulk) when the user explicitly asks for one; when missing we
+            // default to whatever tab the user is currently looking at.
             function extractNewCases(text) {
                 const out = [];
-                const re = /<new-case>\s*([\s\S]*?)\s*<\/new-case>/gi;
+                const re = /<new-case(?:\s+ds=["']?(\w+)["']?)?\s*>\s*([\s\S]*?)\s*<\/new-case>/gi;
                 let m;
                 while ((m = re.exec(text)) !== null) {
+                    let ds = (m[1] || '').toLowerCase();
+                    if (ds !== 'light' && ds !== 'bulk') ds = state.currentDataset;
                     try {
-                        const obj = JSON.parse(m[1]);
-                        if (obj && typeof obj === 'object' && !Array.isArray(obj)) out.push(obj);
-                    } catch (e) { /* malformed JSON — skip silently */ }
+                        const obj = JSON.parse(m[2]);
+                        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+                            out.push({ ds: ds, obj: obj });
+                        }
+                    } catch (e) { /* malformed JSON -- skip silently */ }
                 }
                 return out;
             }
             // Render a "preview + 加入" card for one AI-suggested case.
-            function appendNewCaseCard(obj) {
-                const editableKeys = COLUMNS.filter(c => c.kind !== 'img').map(c => c.key);
+            function appendNewCaseCard(entry) {
+                // Accept both legacy plain-obj entries and the new {ds, obj}
+                // tagged entries so older sessions don't break.
+                const ds = (entry && entry.ds) ? entry.ds : state.currentDataset;
+                const obj = (entry && entry.obj) ? entry.obj : entry;
+                const targetCols = (ds === 'bulk' ? COLUMNS_BULK : COLUMNS_LIGHT);
+                const editableKeys = targetCols.filter(c => c.kind !== 'img').map(c => c.key);
+                const dsLabel = ds === 'bulk' ? '大宗報廢' : '少片數報廢';
+                const isCrossDataset = ds !== state.currentDataset;
+
                 const card = document.createElement('div');
                 card.className = 'ai-newcase-card';
                 const title = document.createElement('div');
                 title.className = 'ai-newcase-title';
-                title.textContent = 'AI 建議新增 case';
+                title.textContent = 'AI 建議新增 case  →  ' + dsLabel;
                 card.appendChild(title);
 
                 const fields = document.createElement('div');
@@ -2973,6 +2987,8 @@
                 if (isViewer()) {
                     addBtn.textContent = '無權限編輯';
                     addBtn.disabled = true;
+                } else if (isCrossDataset) {
+                    addBtn.textContent = '加入到 ' + dsLabel;
                 } else {
                     addBtn.textContent = state.viewMode ? '切到編輯並加入' : '加入表格';
                 }
@@ -2984,35 +3000,68 @@
                 actions.appendChild(dismissBtn);
                 card.appendChild(actions);
 
-                addBtn.addEventListener('click', () => {
-                    // Same login gate as the toolbar 編輯 toggle: clicking 加入
-                    // while in view mode must prompt for credentials first, then
-                    // run the actual insert via this same callback.
-                    const doAdd = () => {
-                        if (state.viewMode) {
-                            enterEditMode();
-                        }
-                        const c = { id: uid() };
-                        editableKeys.forEach(k => {
-                            c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
+                // Same-dataset path: drop into state.cases like before so the
+                // user can edit before saving.
+                const doAddSameDataset = () => {
+                    if (state.viewMode) enterEditMode();
+                    const c = { id: uid() };
+                    editableKeys.forEach(k => {
+                        c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
+                    });
+                    state.cases.unshift(c);
+                    state.dirtyIds.add(c.id);
+                    state.dirty = true;
+                    state.filters = {};
+                    document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
+                    renderAll();
+                    setStatus('已加入 1 筆 (記得按儲存)', 'dirty');
+                    addBtn.textContent = '✓ 已加入,記得按儲存';
+                    addBtn.disabled = true;
+                    dismissBtn.style.display = 'none';
+                };
+
+                // Cross-dataset path: send the row straight to the target file
+                // via the upsert API. The user stays on the current tab; they
+                // can flip to the target tab later to see / edit the new row.
+                const doAddCrossDataset = async () => {
+                    const c = { id: uid() };
+                    editableKeys.forEach(k => {
+                        c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
+                    });
+                    addBtn.disabled = true;
+                    addBtn.textContent = '加入中...';
+                    try {
+                        const res = await authFetch('LineYield.aspx?op=upsert&ds=' + ds, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                            body: JSON.stringify(c)
                         });
-                        state.cases.unshift(c);
-                        state.dirtyIds.add(c.id);
-                        state.dirty = true;
-                        // Clear filters so the new row is actually visible at the top.
-                        state.filters = {};
-                        document.querySelectorAll('#theadRow th[data-col].filtered').forEach(th => th.classList.remove('filtered'));
-                        renderAll();
-                        setStatus('已加入 1 筆 (記得按儲存)', 'dirty');
-                        addBtn.textContent = '✓ 已加入,記得按儲存';
-                        addBtn.disabled = true;
-                        dismissBtn.style.display = 'none';
-                    };
-                    if (state.viewMode && !getAuthUser()) {
-                        openLogin(doAdd);
-                        return;
+                        const data = await res.json();
+                        if (data && data.ok) {
+                            addBtn.textContent = '✓ 已加入到 ' + dsLabel;
+                            dismissBtn.style.display = 'none';
+                            setStatus('已加入 1 筆到 ' + dsLabel + '(可切到該分頁查看)', 'saved');
+                        } else {
+                            addBtn.disabled = false;
+                            addBtn.textContent = '加入失敗,再試';
+                            const why = (data && data.error) || 'unknown';
+                            appendMessage('assistant', '寫入失敗: ' + why, 'error');
+                        }
+                    } catch (e) {
+                        addBtn.disabled = false;
+                        addBtn.textContent = '加入失敗,再試';
+                        appendMessage('assistant', '網路錯誤: ' + e.message, 'error');
                     }
-                    doAdd();
+                };
+
+                addBtn.addEventListener('click', () => {
+                    if (isCrossDataset) {
+                        if (!getAuthUser()) { openLogin(doAddCrossDataset); return; }
+                        doAddCrossDataset();
+                    } else {
+                        if (state.viewMode && !getAuthUser()) { openLogin(doAddSameDataset); return; }
+                        doAddSameDataset();
+                    }
                 });
                 dismissBtn.addEventListener('click', () => card.remove());
 
@@ -3309,14 +3358,16 @@
                     const ctx = buildCasesContext();
                     const messages = [];
                     if (ctx) {
-                        // Build the column-key list from the *currently active*
-                        // schema so the LLM's <new-case> JSON uses the right
-                        // keys for whichever dataset (少片數 / 大宗) the user
-                        // is on; otherwise AI would always emit the bulk keys
-                        // and the add-card UI would render with the wrong fields.
-                        const editableKeys = COLUMNS.filter(c => c.kind !== 'img').map(c => c.key);
-                        const exampleKeys  = editableKeys.slice(0, 6);
-                        const exampleJson  = '{\n' + exampleKeys.map(k => '  "' + k + '": "..."').join(',\n') + '\n}';
+                        // Build the column-key lists for BOTH schemas so the LLM
+                        // can pick the right one when the user explicitly names
+                        // a target dataset ("加入大宗" vs "加入少片數") rather
+                        // than always defaulting to whichever tab is currently
+                        // open. The add-card UI then renders using the schema
+                        // the LLM tagged via the ds= attribute.
+                        const lightKeys = COLUMNS_LIGHT.filter(c => c.kind !== 'img').map(c => c.key);
+                        const bulkKeys  = COLUMNS_BULK .filter(c => c.kind !== 'img').map(c => c.key);
+                        const currentKeys = state.currentDataset === 'bulk' ? bulkKeys : lightKeys;
+                        const exampleJson = '{\n' + currentKeys.slice(0, 6).map(k => '  "' + k + '": "..."').join(',\n') + '\n}';
                         const datasetLabel = state.currentDataset === 'bulk' ? '大宗報廢' : '少片數報廢';
                         messages.push({
                             role: 'system',
@@ -3327,17 +3378,24 @@
                                 '\n\n【格式規定 1 - 引用】引用任何 case 時,**必須**使用 [#N] 的格式(例如 [#5]、[#12]),' +
                                 '不要寫成「case 5」、「第 5 筆」或其他形式。N 就是每筆 case 開頭的列號。' +
                                 '\n\n【格式規定 2 - 新增 case (極重要)】只要使用者句子裡有以下任一關鍵字,' +
-                                '不論句型如何,**一律必須**在回應裡附上 <new-case>{...}</new-case> JSON 區塊。' +
+                                '不論句型如何,**一律必須**在回應裡附上 <new-case ...>{...}</new-case> JSON 區塊。' +
                                 '光寫文字描述、給策略、條列重點都不算。觸發關鍵字:' +
                                 '「加入」、「加一筆」、「加進」、「加上去」、「加到表格」、' +
                                 '「新增」、「建立」、「記錄」、「登錄」、「填入」、「寫進」、「create」、「add」。' +
-                                '\n\n區塊格式:' +
-                                '\n\n<new-case>\n' + exampleJson + '\n</new-case>' +
-                                '\n\n【格式規定 3 - 表格圖片】若使用者上傳的圖片是**表格 / 列表 / 清單**(任何看起來有列與欄的資料),' +
-                                '且想「加入 / 新增 / 記錄」這些資料,**請務必把每一列當成一筆獨立 case**,' +
-                                '為每一列輸出一個 <new-case>...</new-case> 區塊。N 列就要 N 個區塊,不要合併成一段文字摘要。' +
-                                '\n\n可用的欄位 key(嚴格使用以下英文拼寫,不知道的請省略不要編造):\n- ' +
-                                editableKeys.join(', ') +
+                                '\n\n【格式規定 2a - 目標分頁】系統有兩個分頁,各有不同欄位 schema。' +
+                                '你必須判斷使用者要把 case 加到哪一個,並用 `ds="light"` 或 `ds="bulk"` 屬性標記:' +
+                                '\n- **少片數報廢 (ds="light")** 可用欄位 key:\n  ' + lightKeys.join(', ') +
+                                '\n- **大宗報廢 (ds="bulk")** 可用欄位 key:\n  ' + bulkKeys.join(', ') +
+                                '\n\n判斷規則:' +
+                                '\n1. 使用者明說「少片數」/「少片」/「light」 → 必須 ds="light",JSON 內只能用少片數的 key。' +
+                                '\n2. 使用者明說「大宗」/「大宗報廢」/「bulk」 → 必須 ds="bulk",JSON 內只能用大宗的 key。' +
+                                '\n3. 沒明說 → 用當前分頁 ds="' + state.currentDataset + '"。' +
+                                '\n4. 永遠**只用**該 dataset 列出的 key,跨 schema 的 key 一律省略。' +
+                                '\n\n區塊範例(以當前分頁 schema 為例):' +
+                                '\n<new-case ds="' + state.currentDataset + '">\n' + exampleJson + '\n</new-case>' +
+                                '\n\n【格式規定 3 - 表格圖片】若使用者上傳的圖片是**表格 / 列表 / 清單**,' +
+                                '且想「加入 / 新增 / 記錄」這些資料,**請把每一列當成一筆獨立 case**,' +
+                                '為每一列輸出一個 <new-case ds="...">...</new-case> 區塊。N 列就要 N 個區塊,所有區塊用同一個 ds 值。' +
                                 '\n\n【若使用者上傳的是單張圖片(非表格)】先描述圖片內容,' +
                                 '再從上面 case 的文字欄位推測哪幾筆最可能相關,並依相關度由高到低列出 [#N] 並說明判斷依據。' +
                                 '\n\n' + ctx
