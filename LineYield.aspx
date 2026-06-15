@@ -2874,6 +2874,53 @@
             // Build a compact, text-only snapshot of the cases to feed the LLM.
             // Images are skipped (base64 would explode the prompt); multi-line values
             // are flattened so each case is a tidy block.
+            // Trigger keywords that indicate the user wants to add cases.
+            // Kept here so both send() and retryForNewCaseBlocks() check the
+            // same list.
+            const ADD_KEYWORDS = ['加入', '加一筆', '加進', '加到表格', '加上去',
+                '新增', '建立', '記錄', '登錄', '填入', '寫進', 'create', 'add'];
+
+            // One-shot retry when the assistant ignored the new-case rule.
+            // Re-sends the conversation with an injected, ultra-directive
+            // system message that asks it to redo the previous turn as
+            // <new-case>...</new-case> blocks only.
+            async function retryForNewCaseBlocks(s, ctx) {
+                const lightKeys = COLUMNS_LIGHT.filter(c => c.kind !== 'img').map(c => c.key);
+                const bulkKeys  = COLUMNS_BULK .filter(c => c.kind !== 'img').map(c => c.key);
+                const directive = '你上一次的回應沒有輸出 <new-case> 區塊,違反規則 A。' +
+                    '\n請**只輸出 <new-case ds="..."> JSON </new-case> 區塊**,不要任何文字說明、不要前言、不要結語。' +
+                    '\n表格圖片就每列一個區塊。讀得到什麼欄位填什麼,讀不到就省略,絕對不可以改寫成文字。' +
+                    '\nds="light" 可用 key: ' + lightKeys.join(', ') +
+                    '\nds="bulk"  可用 key: ' + bulkKeys.join(', ') +
+                    '\n當前分頁: ds="' + state.currentDataset + '"。使用者句子明說的 dataset 才覆寫。' +
+                    '\n現在重做上一回應。';
+                const messages = [{ role: 'system', content: directive }];
+                messages.push(...s.history);
+                const typing = appendTyping();
+                try {
+                    const res = await authFetch('LineYield.aspx?op=chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                        body: JSON.stringify({ messages: messages })
+                    });
+                    const data = await res.json();
+                    typing.remove();
+                    if (!res.ok || data.ok === false) return; // give up silently
+                    const reply = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+                    if (/<new-case[\s>]/i.test(reply)) {
+                        // Replace the prior assistant turn with the retry so
+                        // history doesn't keep the failed reply around.
+                        if (s.history.length && s.history[s.history.length - 1].role === 'assistant') s.history.pop();
+                        s.history.push({ role: 'assistant', content: reply });
+                        s.updatedAt = Date.now();
+                        saveSessions();
+                        appendMessage('assistant', reply);
+                    }
+                } catch (e) {
+                    typing.remove();
+                }
+            }
+
             function buildCasesContext() {
                 if (!state.cases.length) return '';
                 return state.cases.map((c, i) => {
@@ -3386,7 +3433,19 @@
                                 '「加入」「加一筆」「加進」「加到表格」「新增」「建立」「記錄」「登錄」「填入」「寫進」「create」「add」' +
                                 '\n→ 你的回應**必須**至少包含一個 <new-case ds="...">{...}</new-case> 區塊。' +
                                 '\n→ **禁止**只寫文字摘要、策略建議、判定規則、操作指引、欄位定義。這些都不算完成任務,只會讓使用者看不到任何卡片。' +
-                                '\n→ 即使資料不完整、欄位對不上,也**必須**輸出區塊。能讀到什麼填什麼,讀不到的就把該 key 省略,**不要**因為「資料不夠」就改寫文字。' +
+                                '\n→ 即使圖中欄位跟目標 schema 看起來「對不上」,你也**必須**輸出區塊。' +
+                                '\n→ **欄位映射常用對照(找得到就填)**:' +
+                                '\n   時間/日期/Date → light:createDate 或 bulk:date' +
+                                '\n   機台/設備/EQ → light:eqpId 或 bulk:equipment' +
+                                '\n   原因/Root Cause → 兩邊都有 rootCause' +
+                                '\n   零件/Parts → 兩邊都有 parts' +
+                                '\n   分類/類別 → light:category 或 bulk:category' +
+                                '\n   世代/Generation → 兩邊都有 generation' +
+                                '\n   連結/Link → 兩邊都有 link' +
+                                '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)' +
+                                '\n   片數/Qty → light:qty(bulk 無對應就省略)' +
+                                '\n   缺陷類型/Defect Type → bulk:defectType(light 無對應就省略)' +
+                                '\n→ 讀不到的 key 直接省略不要寫,**但 JSON 區塊還是要出來**。寧可只有 2-3 個欄位也要輸出,絕對不能改寫成文字摘要。' +
                                 '\n\n【目標分頁判斷】' +
                                 '\n- 使用者句子有「少片數」/「少片」/「light」 → ds="light"' +
                                 '\n- 使用者句子有「大宗」/「大宗報廢」/「bulk」 → ds="bulk"' +
@@ -3467,6 +3526,19 @@
                     s.history.push({ role: 'assistant', content: reply });
                     s.updatedAt = Date.now();
                     saveSessions();
+
+                    // Self-correction fallback: if the user message clearly
+                    // asked to add cases (keywords present) but the LLM
+                    // returned ZERO <new-case> blocks, ask once more with
+                    // a sharper directive. One-shot only -- the retry sets
+                    // attemptedRetry on the session so we don't loop.
+                    const userWantsAdd = ADD_KEYWORDS.some(k => displayText.indexOf(k) >= 0);
+                    const replyHasBlocks = /<new-case[\s>]/i.test(reply);
+                    if (userWantsAdd && !replyHasBlocks && !s._retriedNewCase) {
+                        s._retriedNewCase = true;
+                        try { await retryForNewCaseBlocks(s, ctx); }
+                        finally { s._retriedNewCase = false; }
+                    }
                 } catch (e) {
                     typing.remove();
                     appendMessage('assistant', '網路錯誤: ' + e.message, 'error');
