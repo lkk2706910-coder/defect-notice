@@ -518,6 +518,23 @@
         td .cell-text { white-space: pre-wrap; word-break: break-word; min-height: 18px; }
         td.editable .cell-text { cursor: text; }
         td.editable .cell-text:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--input-bg); }
+
+        /* Cascading dropdown cells (現象1階 / ZE5.0 / ZE 1階 in 少片數) */
+        td.cascade-cell select {
+            width: 100%;
+            min-width: 120px;
+            padding: 4px 6px;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+            cursor: pointer;
+        }
+        td.cascade-cell select:focus { border-color: var(--accent); }
+        td.cascade-cell select:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.6; }
         /* contenteditable placeholder for empty cells */
         td .cell-text[data-placeholder]:empty::before {
             content: attr(data-placeholder);
@@ -1338,14 +1355,134 @@
             { key: 'rootCause',     label: 'Root cause' },
             { key: 'parts',         label: 'Parts' },
             { key: 'finalAction',   label: 'Final_Action' },
-            { key: 'phenomenon1',   label: '現象1階' },
-            { key: 'ze50',          label: 'ZE5.0' },
-            { key: 'ze1',           label: 'ZE 1階' },
+            { key: 'phenomenon1',   label: '現象1階',              kind: 'cascade' },
+            { key: 'ze50',          label: 'ZE5.0',                kind: 'cascade' },
+            { key: 'ze1',           label: 'ZE 1階',               kind: 'cascade' },
             { key: 'meetingUpdate', label: 'meeting update' },
             { key: 'productType',   label: 'auto or normal 產品' }
         ];
 
         let COLUMNS = COLUMNS_LIGHT;
+
+        // Cascading dropdown options for the 少片數 schema.
+        //   Level 1: phenomenon1  (現象1階)
+        //   Level 2: ze50         (ZE5.0) depends on phenomenon1
+        //   Level 3: ze1          (ZE 1階) depends on phenomenon1 + ze50
+        // Categories 0-2 (天災 / BKM Change / Eng.Request) have no sub-options
+        // so their dependent cells stay disabled.
+        const CASCADE_DATA = {
+            phenomenon1: [
+                '0.天災',
+                '1.BKM Change',
+                '2.Eng.Request',
+                '3.MO',
+                '4.Tool Down',
+                '5.Wafer Broken',
+                '6.Scratch OOS',
+                '7.Defect OOS',
+                '8.WAT/In-line OOS'
+            ],
+            ze50: {
+                '0.天災':            [],
+                '1.BKM Change':      [],
+                '2.Eng.Request':     [],
+                '3.MO':              ['2.不製造'],
+                '4.Tool Down':       ['1.不接受', '2.不製造', '3.不流出'],
+                '5.Wafer Broken':    ['1.不接受', '2.不製造', '3.不流出'],
+                '6.Scratch OOS':     ['1.不接受', '2.不製造', '3.不流出'],
+                '7.Defect OOS':      ['1.不接受', '2.不製造', '3.不流出'],
+                '8.WAT/In-line OOS': ['1.不接受', '2.不製造', '3.不流出']
+            },
+            ze1: {
+                '3.MO|2.不製造': ['3.1.Mindset & Training'],
+
+                '4.Tool Down|1.不接受': [
+                    '4.1.Incoming Material/ Incoming Parts Management',
+                    '4.2.Process Robustness',
+                    '4.3.Change Management'
+                ],
+                '4.Tool Down|2.不製造': [
+                    '4.4.PM Management',
+                    '4.5.設備失效 (EQ malfunction)',
+                    '4.6.Mindset & Training'
+                ],
+                '4.Tool Down|3.不流出': [
+                    '4.7.Tool matching',
+                    '4.8.Unknown'
+                ],
+
+                '5.Wafer Broken|1.不接受': [
+                    '5.1.Incoming Material/ Incoming Parts Management',
+                    '5.2.Process Robustness',
+                    '5.3.Change Management'
+                ],
+                '5.Wafer Broken|2.不製造': [
+                    '5.4.PM Management',
+                    '5.5.設備失效 (EQ malfunction)',
+                    '5.6.Mindset & Training'
+                ],
+                '5.Wafer Broken|3.不流出': [
+                    '5.7.Tool matching',
+                    '5.8.Unknown'
+                ],
+
+                '6.Scratch OOS|1.不接受': [
+                    '6.1.Incoming Material/ Incoming Parts Management',
+                    '6.2.Process Robustness',
+                    '6.3.Change Management'
+                ],
+                '6.Scratch OOS|2.不製造': [
+                    '6.4.PM Management',
+                    '6.5.設備失效 (EQ malfunction)',
+                    '6.6.Mindset & Training'
+                ],
+                '6.Scratch OOS|3.不流出': [
+                    '6.7.Unknown'
+                ],
+
+                '7.Defect OOS|1.不接受': [
+                    '7.1.Incoming Material/ Incoming Parts Management',
+                    '7.2.Process Robustness',
+                    '7.3.Change Management'
+                ],
+                '7.Defect OOS|2.不製造': [
+                    '7.4.PM Management',
+                    '7.5.設備失效 (EQ malfunction)',
+                    '7.6.Tool matching'
+                ],
+                '7.Defect OOS|3.不流出': [
+                    '7.7.Unknown'
+                ],
+
+                '8.WAT/In-line OOS|1.不接受': [
+                    '8.1.Incoming Material/ Incoming Parts Management',
+                    '8.2.Process Robustness',
+                    '8.3.Change Management'
+                ],
+                '8.WAT/In-line OOS|2.不製造': [
+                    '8.4.PM Management',
+                    '8.5.設備失效 (EQ malfunction)',
+                    '8.6.Tool matching'
+                ],
+                '8.WAT/In-line OOS|3.不流出': [
+                    '8.7.Unknown'
+                ]
+            }
+        };
+
+        function cascadeOptionsFor(key, c) {
+            if (key === 'phenomenon1') return CASCADE_DATA.phenomenon1.slice();
+            if (key === 'ze50') {
+                const p = c.phenomenon1 || '';
+                return (CASCADE_DATA.ze50[p] || []).slice();
+            }
+            if (key === 'ze1') {
+                const p1 = c.phenomenon1 || '';
+                const p2 = c.ze50 || '';
+                return (CASCADE_DATA.ze1[p1 + '|' + p2] || []).slice();
+            }
+            return [];
+        }
 
         function applyColumnSchema(datasetName) {
             COLUMNS = datasetName === 'bulk' ? COLUMNS_BULK : COLUMNS_LIGHT;
@@ -1581,6 +1718,55 @@
                         if (state.viewMode) return;
                         openLinkEditor(c, col.key, td);
                     });
+                } else if (col.kind === 'cascade') {
+                    // 3-level cascading dropdown (現象1階 -> ZE5.0 -> ZE 1階).
+                    // In view-only mode just print the value as text.
+                    td.className = 'editable cascade-cell';
+                    const v = c[col.key] || '';
+                    if (state.viewMode) {
+                        td.innerHTML = '<div class="cell-text">' + escapeHtml(v) + '</div>';
+                    } else {
+                        const opts = cascadeOptionsFor(col.key, c);
+                        const select = document.createElement('select');
+                        select.setAttribute('data-key', col.key);
+                        const blank = document.createElement('option');
+                        blank.value = '';
+                        blank.textContent = opts.length === 0 ? '(無選項)' : '(請選擇)';
+                        select.appendChild(blank);
+                        opts.forEach(opt => {
+                            const o = document.createElement('option');
+                            o.value = opt;
+                            o.textContent = opt;
+                            if (opt === v) o.selected = true;
+                            select.appendChild(o);
+                        });
+                        if (opts.length === 0) select.disabled = true;
+                        // Edge case: the saved value isn't in the current option
+                        // set (e.g. parent column changed externally). Show it
+                        // so the user can see it but mark it as "(舊值)".
+                        if (v && opts.indexOf(v) < 0) {
+                            const stale = document.createElement('option');
+                            stale.value = v;
+                            stale.textContent = v + '  (舊值)';
+                            stale.selected = true;
+                            select.appendChild(stale);
+                        }
+                        select.addEventListener('change', () => {
+                            c[col.key] = select.value;
+                            // Changing a parent must clear its descendants so a
+                            // stale combo (e.g. ze1 from previous phenomenon1)
+                            // doesn't survive.
+                            if (col.key === 'phenomenon1') { c.ze50 = ''; c.ze1 = ''; }
+                            else if (col.key === 'ze50')   { c.ze1 = ''; }
+                            markDirty(c.id);
+                            // Re-render the row so the dependent dropdowns pick
+                            // up their new option lists.
+                            const newTr = renderRow(c);
+                            tr.replaceWith(newTr);
+                        });
+                        td.innerHTML = '';
+                        td.appendChild(select);
+                    }
                 } else {
                     td.className = 'editable';
                     const v = c[col.key] || '';
