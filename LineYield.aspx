@@ -1249,27 +1249,10 @@
         <div class="table-wrap">
             <table class="cases" id="tbl">
                 <thead>
-                    <tr id="theadRow">
-                        <th class="col-img">Wafer map</th>
-                        <th class="col-img">Image</th>
-                        <th class="col-date" data-col="date">時間</th>
-                        <th class="col-cat" data-col="category">異常類別</th>
-                        <th class="col-link" data-col="link">Link</th>
-                        <th class="col-parts" data-col="parts">異常 parts</th>
-                        <th class="col-root" data-col="rootCause">Root cause &amp; Action</th>
-                        <th class="col-entity" data-col="entityRecipe">Entity / Recipe</th>
-                        <th class="col-eqp" data-col="equipment">異常機台</th>
-                        <th class="col-impact" data-col="impact">Impact / 報廢</th>
-                        <th class="col-gen" data-col="generation">Generation</th>
-                        <th class="col-model" data-col="productModel">產品型號</th>
-                        <th class="col-defect" data-col="defectType">Defect type</th>
-                        <th class="col-map" data-col="map">Map</th>
-                        <th class="col-edx" data-col="edx">EDX</th>
-                        <th class="col-trend" data-col="waferTrend">Wafer Trend</th>
-                        <th class="col-pos" data-col="position">對應位置</th>
-                        <th class="col-other" data-col="other">其他特徵</th>
-                        <th></th>
-                    </tr>
+                    <!-- Header cells are rendered by applyColumnSchema() so the
+                         layout follows whichever dataset (light / bulk) is
+                         currently active. -->
+                    <tr id="theadRow"></tr>
                 </thead>
                 <tbody id="tbody"></tbody>
             </table>
@@ -1311,26 +1294,74 @@
     </div>
 
     <script>
-        const COLUMNS = [
-            { key: 'waferMap', kind: 'img' },
-            { key: 'image', kind: 'img' },
-            { key: 'date' },
-            { key: 'category' },
-            { key: 'link', kind: 'link' },
-            { key: 'parts' },
-            { key: 'rootCause' },
-            { key: 'entityRecipe' },
-            { key: 'equipment' },
-            { key: 'impact' },
-            { key: 'generation' },
-            { key: 'productModel' },
-            { key: 'defectType' },
-            { key: 'map' },
-            { key: 'edx' },
-            { key: 'waferTrend' },
-            { key: 'position' },
-            { key: 'other' }
+        // ---- Column schemas per dataset ----
+        // Each schema is the source of truth for both the THEAD layout and
+        // the per-row cell rendering.  COLUMNS is a mutable reference that
+        // points at whichever schema the active dataset uses.
+        //   - kind 'img'  : image upload + thumbnail grid
+        //   - kind 'link' : multi-URL editor (one link per line)
+        //   - default     : plain editable text
+        const COLUMNS_BULK = [
+            { key: 'waferMap',     label: 'Wafer map',           kind: 'img' },
+            { key: 'image',        label: 'Image',               kind: 'img' },
+            { key: 'date',         label: '時間' },
+            { key: 'category',     label: '異常類別' },
+            { key: 'link',         label: 'Link',                kind: 'link' },
+            { key: 'parts',        label: '異常 parts' },
+            { key: 'rootCause',    label: 'Root cause & Action' },
+            { key: 'entityRecipe', label: 'Entity / Recipe' },
+            { key: 'equipment',    label: '異常機台' },
+            { key: 'impact',       label: 'Impact / 報廢' },
+            { key: 'generation',   label: 'Generation' },
+            { key: 'productModel', label: '產品型號' },
+            { key: 'defectType',   label: 'Defect type' },
+            { key: 'map',          label: 'Map' },
+            { key: 'edx',          label: 'EDX' },
+            { key: 'waferTrend',   label: 'Wafer Trend' },
+            { key: 'position',     label: '對應位置' },
+            { key: 'other',        label: '其他特徵' }
         ];
+
+        // 少片數報廢:no image columns, Link is the multi-URL editor,
+        // every other column is plain text input.
+        const COLUMNS_LIGHT = [
+            { key: 'link',          label: 'Link',                  kind: 'link' },
+            { key: 'reviewAR',      label: '已review AR' },
+            { key: 'generation',    label: 'Generation' },
+            { key: 'owner',         label: 'owner' },
+            { key: 'category',      label: '分類填寫' },
+            { key: 'createDate',    label: 'Create_date' },
+            { key: 'lotId',         label: 'LotID' },
+            { key: 'qty',           label: 'Qty' },
+            { key: 'eqpId',         label: 'EqpID' },
+            { key: 'reason',        label: '原因' },
+            { key: 'rootCause',     label: 'Root cause' },
+            { key: 'parts',         label: 'Parts' },
+            { key: 'finalAction',   label: 'Final_Action' },
+            { key: 'phenomenon1',   label: '現象1階' },
+            { key: 'ze50',          label: 'ZE5.0' },
+            { key: 'ze1',           label: 'ZE 1階' },
+            { key: 'meetingUpdate', label: 'meeting update' },
+            { key: 'productType',   label: 'auto or normal 產品' }
+        ];
+
+        let COLUMNS = COLUMNS_LIGHT;
+
+        function applyColumnSchema(datasetName) {
+            COLUMNS = datasetName === 'bulk' ? COLUMNS_BULK : COLUMNS_LIGHT;
+            const theadRow = document.getElementById('theadRow');
+            if (!theadRow) return;
+            const cells = COLUMNS.map(col => {
+                if (col.kind === 'img') {
+                    return '<th class="col-img">' + escapeHtml(col.label) + '</th>';
+                }
+                return '<th data-col="' + col.key + '">' + escapeHtml(col.label) + '</th>';
+            });
+            // Trailing empty header for the per-row delete-action cell.
+            cells.push('<th></th>');
+            theadRow.innerHTML = cells.join('');
+            decorateHeaders();
+        }
 
         const state = {
             cases: [],
@@ -2545,6 +2576,11 @@
                 setStatus('載入失敗: ' + e.message, 'error');
             }
         }
+        // THEAD starts empty (the static markup got reduced to <tr> with no
+        // cells); seed it with the default-dataset schema before bootGate so
+        // even the pre-login state has correctly-laid-out headers.
+        applyColumnSchema(state.currentDataset);
+
         (function bootGate() {
             if (getAuthUser()) {
                 loadData();
@@ -2587,6 +2623,10 @@
                     state.filters = {};
                     state.cases = [];
                     state.loadedIds = new Set();
+                    // Reset the COLUMNS + thead to match this dataset, then
+                    // pull rows; cell rendering downstream uses COLUMNS, so
+                    // schema must be set before renderAll runs.
+                    applyColumnSchema(name);
                     if (typeof loadData === 'function') loadData();
                 }
             }
