@@ -535,6 +535,20 @@
         }
         td.cascade-cell select:focus { border-color: var(--accent); }
         td.cascade-cell select:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.6; }
+        /* EqpID free-text input with tool autocomplete via <datalist> */
+        td.cascade-cell input.eqp-input {
+            width: 100%;
+            min-width: 120px;
+            padding: 4px 6px;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+        }
+        td.cascade-cell input.eqp-input:focus { border-color: var(--accent); }
 
         /* Date-input cells (createDate / meetingUpdate in 少片數)
            Two controls side-by-side:
@@ -1363,6 +1377,9 @@
                 </thead>
                 <tbody id="tbody"></tbody>
             </table>
+            <!-- Tool autocomplete source for the EqpID inputs. Populated
+                 once from EQP_DATA on page boot. -->
+            <datalist id="eqpToolList"></datalist>
         </div>
         </div><!-- /#viewCases -->
     </div>
@@ -1616,6 +1633,23 @@
             EQP_DATA.toolToParent = toolToParent;
             EQP_DATA.allTools = allTools;
         })();
+
+        // Fill the global <datalist> used by EqpID free-text inputs.
+        function populateEqpToolList() {
+            const dl = document.getElementById('eqpToolList');
+            if (!dl) return;
+            dl.innerHTML = '';
+            EQP_DATA.allTools.forEach(t => {
+                const o = document.createElement('option');
+                o.value = t;
+                dl.appendChild(o);
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', populateEqpToolList);
+        } else {
+            populateEqpToolList();
+        }
         // that <input type="date"> requires. Old "m/d" / "mm/dd" entries
         // get the current year prepended so the picker can show something
         // sensible -- the new value is then re-saved in full ISO once the
@@ -1974,12 +2008,47 @@
                         td.appendChild(wrap);
                     }
                 } else if (col.kind === 'cascade') {
-                    // 3-level cascading dropdown (現象1階 -> ZE5.0 -> ZE 1階).
+                    // 3-level cascading dropdown (現象1階 -> ZE5.0 -> ZE 1階,
+                    // and EqpType -> Entity -> EqpID).
                     // In view-only mode just print the value as text.
                     td.className = 'editable cascade-cell';
                     const v = c[col.key] || '';
                     if (state.viewMode) {
                         td.innerHTML = '<div class="cell-text">' + escapeHtml(v) + '</div>';
+                    } else if (col.key === 'eqpId') {
+                        // EqpID is special: free-text <input list=...> so the
+                        // user can either pick from autocomplete OR just type
+                        // the tool name directly. Either way, on blur/change
+                        // we look up the parent EqpType + Entity and
+                        // back-fill them.
+                        const inp = document.createElement('input');
+                        inp.type = 'text';
+                        inp.className = 'eqp-input';
+                        inp.setAttribute('list', 'eqpToolList');
+                        inp.setAttribute('data-key', col.key);
+                        inp.value = v;
+                        inp.placeholder = '(輸入或選擇 tool)';
+                        const apply = () => {
+                            const newVal = inp.value.trim();
+                            const oldVal = c[col.key] || '';
+                            const parent = EQP_DATA.toolToParent[newVal];
+                            const willBackfill = !!parent && (parent.eqpType !== c.eqpType || parent.entity !== c.entity);
+                            if (newVal === oldVal && !willBackfill) return;
+                            c[col.key] = newVal;
+                            if (parent) {
+                                c.eqpType = parent.eqpType;
+                                c.entity  = parent.entity;
+                            }
+                            markDirty(c.id);
+                            // Re-render so EqpType / Entity selects show the
+                            // back-filled values.
+                            const newTr = renderRow(c);
+                            tr.replaceWith(newTr);
+                        };
+                        inp.addEventListener('change', apply);
+                        inp.addEventListener('blur', apply);
+                        td.innerHTML = '';
+                        td.appendChild(inp);
                     } else {
                         const opts = cascadeOptionsFor(col.key, c);
                         const select = document.createElement('select');
