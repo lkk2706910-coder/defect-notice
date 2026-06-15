@@ -4280,10 +4280,21 @@
                                 '\n→ id 用上面 case 列表中「id=...」那串完整字串(不是 [#N]);ds 用該 case 所屬的分頁(從上下文判斷,通常就是當前分頁)。' +
                                 '\n→ JSON 內**只包含要改的欄位**,其他欄位不要寫,保持簡潔。' +
                                 '\n→ **禁止**改用 <new-case>(那會建立新 case 不是修改);也禁止只寫文字「我會幫你改...」而不輸出 <edit-case> 區塊。' +
-                                '\n→ 多筆要改就輸出多個 <edit-case> 區塊。' +
-                                '\n【範例 - 使用者說「把 [#5] 的 EqpID 改成 ULKCVD-B05」】' +
+                                '\n→ 一個區塊可以同時改多個欄位(JSON 多個 key);多筆要改就輸出多個區塊。' +
+                                '\n【範例 1 - 單筆單欄位】使用者說「把 [#5] 的 EqpID 改成 ULKCVD-B05」' +
                                 '\n<edit-case id="abc-123-uuid-of-case-5" ds="light">' +
                                 '\n{"eqpId": "ULKCVD-B05"}' +
+                                '\n</edit-case>' +
+                                '\n【範例 2 - 單筆多欄位】使用者說「把 [#5] 的 EqpID 改成 ULKCVD-B05,原因改成 PM Cleaning」' +
+                                '\n<edit-case id="abc-123-uuid-of-case-5" ds="light">' +
+                                '\n{"eqpId": "ULKCVD-B05", "reason": "PM Cleaning"}' +
+                                '\n</edit-case>' +
+                                '\n【範例 3 - 多筆】使用者說「[#5] [#7] 的 productType 都改成 normal」' +
+                                '\n<edit-case id="abc-123-uuid-of-case-5" ds="light">' +
+                                '\n{"productType": "normal"}' +
+                                '\n</edit-case>' +
+                                '\n<edit-case id="def-456-uuid-of-case-7" ds="light">' +
+                                '\n{"productType": "normal"}' +
                                 '\n</edit-case>' +
                                 '\n\n=============================================' +
                                 '\n【規則 C - 單張圖片(非表格)且使用者沒說要新增】' +
