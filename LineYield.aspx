@@ -1429,6 +1429,7 @@
             { key: 'waferMap',     label: 'Wafer map',           kind: 'img' },
             { key: 'image',        label: 'Image',               kind: 'img' },
             { key: 'date',         label: '時間' },
+            { key: 'site',         label: 'Site' },
             { key: 'category',     label: '異常類別' },
             { key: 'link',         label: 'Link',                kind: 'link' },
             { key: 'parts',        label: '異常 parts' },
@@ -4083,6 +4084,7 @@
                                 '\n   原因/Root Cause → 兩邊都有 rootCause' +
                                 '\n   零件/Parts → 兩邊都有 parts' +
                                 '\n   分類/類別 → bulk:category(light 無對應就省略)' +
+                                '\n   Site/廠區/廠別(F8A/F12A...) → bulk:site(light 無對應就省略)' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
                                 '\n   連結/Link → 兩邊都有 link' +
                                 '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)。**多個批號用 \\n 換行分開**,例如 "GTC5Q.26\\nGTC5Q.22\\nGTC5Q.29"' +
