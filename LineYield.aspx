@@ -1742,6 +1742,12 @@
         // ---- Decorate <th data-col="..."> with sort indicator + filter button ----
         function decorateHeaders() {
             document.querySelectorAll('#theadRow th[data-col]').forEach(th => {
+                // Skip if already decorated. decorateHeaders() is called on
+                // every loadData(), and dataset-switching re-runs loadData,
+                // which would otherwise re-read th.textContent (now including
+                // the previous run's chevron) and stack a new "▾" on top each
+                // time -- producing "時間 ▾ ▾ ▾ ..." in the header.
+                if (th.querySelector('.th-inner')) return;
                 const key = th.getAttribute('data-col');
                 const label = th.textContent.trim();
                 th.innerHTML =
