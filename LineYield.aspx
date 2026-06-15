@@ -536,10 +536,14 @@
         td.cascade-cell select:focus { border-color: var(--accent); }
         td.cascade-cell select:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.6; }
 
-        /* Date-picker cells (createDate / meetingUpdate in 少片數) */
-        td.date-cell input[type="date"] {
-            width: 100%;
-            min-width: 130px;
+        /* Date-input cells (createDate / meetingUpdate in 少片數)
+           Two controls side-by-side: free-text input + 📅 button. The
+           hidden <input type=date> is only used to drive the native picker
+           when the button is pressed. */
+        td.date-cell .date-wrap { display: flex; align-items: center; gap: 4px; position: relative; }
+        td.date-cell input.date-text {
+            flex: 1;
+            min-width: 90px;
             padding: 4px 6px;
             background: var(--input-bg);
             color: var(--text);
@@ -549,13 +553,19 @@
             font-size: 12px;
             outline: none;
         }
-        td.date-cell input[type="date"]:focus { border-color: var(--accent); }
-        /* Force the calendar icon to a colour scheme matching the theme */
-        td.date-cell input[type="date"]::-webkit-calendar-picker-indicator {
-            filter: invert(var(--cal-invert, 1));
-            opacity: 0.6;
+        td.date-cell input.date-text:focus { border-color: var(--accent); }
+        td.date-cell button.date-pick-btn {
+            background: var(--tint-med);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 3px 6px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            flex: none;
         }
-        html[data-theme="light"] { --cal-invert: 0; }
+        td.date-cell button.date-pick-btn:hover { background: var(--tint-high); border-color: var(--accent); }
+        td.date-cell input.date-hidden { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
         /* contenteditable placeholder for empty cells */
         td .cell-text[data-placeholder]:empty::before {
             content: attr(data-placeholder);
@@ -1765,36 +1775,80 @@
                         openLinkEditor(c, col.key, td);
                     });
                 } else if (col.kind === 'date') {
-                    // Native HTML5 date picker. Storage is yyyy-mm-dd (ISO),
-                    // which is also what input[type=date] requires. Legacy
-                    // "m/d" values are upgraded to yyyy-mm-dd the first time
-                    // the user opens the picker on them.
+                    // Hybrid: a free-text input (so the user can still type
+                    // legacy "m/d" or paste any string) PLUS a 📅 button that
+                    // opens the native date picker for when they prefer to
+                    // click. Both write to the same c[col.key]; text blur
+                    // normalizes via toIsoDate() when the value parses.
                     td.className = 'editable date-cell';
                     const raw = c[col.key] || '';
                     if (state.viewMode) {
                         td.innerHTML = '<div class="cell-text">' + escapeHtml(raw) + '</div>';
                     } else {
-                        const iso = toIsoDate(raw);
-                        const input = document.createElement('input');
-                        input.type = 'date';
-                        input.value = iso;
-                        input.setAttribute('data-key', col.key);
-                        input.addEventListener('change', () => {
-                            const v = input.value; // browser always emits yyyy-mm-dd
-                            if (v !== c[col.key]) {
+                        const wrap = document.createElement('div');
+                        wrap.className = 'date-wrap';
+
+                        const text = document.createElement('input');
+                        text.type = 'text';
+                        text.className = 'date-text';
+                        text.value = raw;
+                        text.placeholder = 'yyyy-mm-dd';
+                        text.setAttribute('data-key', col.key);
+
+                        const pickBtn = document.createElement('button');
+                        pickBtn.type = 'button';
+                        pickBtn.className = 'date-pick-btn';
+                        pickBtn.title = '開啟月曆';
+                        pickBtn.textContent = '📅';
+
+                        // Hidden native date input drives the picker.
+                        const hidden = document.createElement('input');
+                        hidden.type = 'date';
+                        hidden.className = 'date-hidden';
+                        hidden.value = toIsoDate(raw);
+
+                        // Text blur: write whatever the user typed, normalize
+                        // to ISO if we can parse it, otherwise keep raw.
+                        text.addEventListener('blur', () => {
+                            const v = text.value.trim();
+                            const iso = toIsoDate(v);
+                            const newVal = iso || v;
+                            if (newVal !== c[col.key]) {
+                                c[col.key] = newVal;
+                                markDirty(c.id);
+                            }
+                            if (iso) text.value = iso;
+                            hidden.value = iso;
+                        });
+
+                        // Picker button: sync hidden input value from current
+                        // text, then open the picker (modern showPicker, with
+                        // a click() fallback for older browsers).
+                        pickBtn.addEventListener('click', () => {
+                            hidden.value = toIsoDate(text.value) || new Date().toISOString().slice(0,10);
+                            try {
+                                if (typeof hidden.showPicker === 'function') hidden.showPicker();
+                                else hidden.click();
+                            } catch (e) {
+                                hidden.click();
+                            }
+                        });
+
+                        // Picker change: copy back into text + save.
+                        hidden.addEventListener('change', () => {
+                            const v = hidden.value;
+                            if (v && v !== c[col.key]) {
                                 c[col.key] = v;
+                                text.value = v;
                                 markDirty(c.id);
                             }
                         });
-                        // If we just upgraded a legacy short value, also flag
-                        // dirty so the user knows a save will replace "6/15"
-                        // with "2026-06-15".
-                        if (iso && iso !== raw) {
-                            c[col.key] = iso;
-                            markDirty(c.id);
-                        }
+
+                        wrap.appendChild(text);
+                        wrap.appendChild(pickBtn);
+                        wrap.appendChild(hidden);
                         td.innerHTML = '';
-                        td.appendChild(input);
+                        td.appendChild(wrap);
                     }
                 } else if (col.kind === 'cascade') {
                     // 3-level cascading dropdown (現象1階 -> ZE5.0 -> ZE 1階).
