@@ -1616,6 +1616,9 @@
                 'SILPE|SILPE_PADSG':     ['SILPE-B03'],
                 'TEOSPE|TEOSPE_AL':      ['TEOSPE-B01','TEOSPE-B03','TEOSPE-B08','TEOSPE-B12'],
                 'TEOSPE|TEOSPE_CU':      ['TEOSPE-B02','TEOSPE-B04','TEOSPE-B05','TEOSPE-B06','TEOSPE-B07','TEOSPE-B09','TEOSPE-B11'],
+                'TTOX|TTOX':             ['TTOX-B01','TTOX-B02','TTOX-B03','TTOX-B04','TTOX-B05','TTOX-B06','TTOX-B07','TTOX-B08','TTOX-B09'],
+                'CUTTOX|CUTTOX':         ['CUTTOX-B01','CUTTOX-B02','CUTTOX-B03','CUTTOX-B04','CUTTOX-B05','CUTTOX-B06','CUTTOX-B07','CUTTOX-B08','CUTTOX-B09'],
+                'CUKVALUE|CUKVALUE':     ['CUKVALUE-B01'],
                 'ULKCVD|ULKCVD_DEP':     ['ULKCVD-B01','ULKCVD-B02','ULKCVD-B03','ULKCVD-B04','ULKCVD-B05','ULKCVD-B06','ULKCVD-B07','ULKCVD-B08','ULKCVD-B09','ULKCVD-B10','ULKCVD-B11','ULKCVD-B12','ULKCVD-B13'],
                 'ULKCVD|ULKCVD_CUR':     ['ULKCVD-B31','ULKCVD-B32','ULKCVD-B33','ULKCVD-B35','ULKCVD-B36','ULKCVD-B37','ULKCVD-B38']
             }
@@ -4096,6 +4099,7 @@
                                 '\n     SACVD-B01/B04/B06/B08..B10 → SACVD/SACVD_HARP; SACVD-B02/B11/B12/B81 → SACVD/SACVD_SA; SACVD-B03/B05/B07 → SACVD/SACVD_SMT;' +
                                 '\n     SILPE-B03 → SILPE/SILPE_PADSG;' +
                                 '\n     TEOSPE-B01/B03/B08/B12 → TEOSPE/TEOSPE_AL; TEOSPE-B02/B04..B07/B09/B11 → TEOSPE/TEOSPE_CU;' +
+                                '\n     TTOX-B01..B09 → TTOX/TTOX; CUTTOX-B01..B09 → CUTTOX/CUTTOX; CUKVALUE-B01 → CUKVALUE/CUKVALUE;' +
                                 '\n     ULKCVD-B01..B13 → ULKCVD/ULKCVD_DEP; ULKCVD-B31..B33/B35..B38 → ULKCVD/ULKCVD_CUR.' +
                                 '\n   原因/Root Cause → 兩邊都有 rootCause' +
                                 '\n   零件/Parts → 兩邊都有 parts' +
