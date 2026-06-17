@@ -1290,6 +1290,16 @@
             font-size: 12px;
             color: var(--text);
         }
+        .ai-newcase-card.has-dup { border-color: var(--warn-border); background: var(--warn-bg); }
+        .ai-newcase-card .ai-newcase-dup {
+            color: var(--warn);
+            background: rgba(0,0,0,0.18);
+            border: 1px dashed var(--warn-border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
         .ai-newcase-title {
             font-weight: 600;
             color: var(--accent);
@@ -3114,6 +3124,28 @@
                 setStatus('沒有變更');
                 return;
             }
+            // Dup guard for brand-new (never-saved) cases. If a newly added
+            // row collides with an existing one on LotID + EqpID, one confirm
+            // covers everything; cancel aborts the whole save. Only Light
+            // dataset has the schema for this check.
+            if (typeof findDuplicateCases === 'function' && state.currentDataset === 'light') {
+                const dupHits = [];
+                for (const id of dirtyIds) {
+                    if (state.loadedIds.has(id)) continue;
+                    const c = state.cases.find(x => x.id === id);
+                    if (!c) continue;
+                    const dups = findDuplicateCases(c, { skipId: id });
+                    if (dups.length > 0) dupHits.push({ c: c, dups: dups });
+                }
+                if (dupHits.length > 0) {
+                    const lines = dupHits.map(h => {
+                        const refs = h.dups.map(d => '[#' + d.n + ']').join(', ');
+                        return '  ' + (h.c.lotId || '(no LotID)') + ' @ ' + (h.c.eqpId || '(no EqpID)') + ' ↔ ' + refs;
+                    }).join('\n');
+                    const msg = '以下新加入的 case 跟既有資料 LotID + EqpID 重複:\n' + lines + '\n\n仍要儲存全部嗎?';
+                    if (!confirm(msg)) { setStatus('儲存已取消'); return; }
+                }
+            }
             let done = 0;
             try {
                 // Upserts (modified / newly added cases)
@@ -3694,6 +3726,34 @@
                 }
                 return out;
             }
+            // Find existing cases that look like duplicates of the given
+            // candidate (manual or AI). Match rule: any of the candidate's
+            // LotID lines also appears in an existing case AND the EqpID
+            // (trimmed, case-insensitive) is the same. Both fields must be
+            // non-empty in the candidate -- otherwise there's nothing
+            // strong enough to compare. Only checks the light dataset
+            // (Lesson Learn doesn't have LotID/EqpID schema).
+            function findDuplicateCases(candidate, opts) {
+                opts = opts || {};
+                const skipId = opts.skipId || null;
+                if (state.currentDataset !== 'light') return [];
+                const eqp = String(candidate.eqpId || '').trim().toUpperCase();
+                const lotRaw = String(candidate.lotId || '').trim();
+                if (!eqp || !lotRaw) return [];
+                const lots = lotRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(Boolean);
+                if (lots.length === 0) return [];
+                const out = [];
+                state.cases.forEach((c, i) => {
+                    if (skipId && c.id === skipId) return;
+                    const cEqp = String(c.eqpId || '').trim().toUpperCase();
+                    if (!cEqp || cEqp !== eqp) return;
+                    const cLots = String(c.lotId || '').split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(Boolean);
+                    if (cLots.length === 0) return;
+                    const overlap = lots.some(l => cLots.indexOf(l) >= 0);
+                    if (overlap) out.push({ n: i + 1, case: c });
+                });
+                return out;
+            }
             // Stable fingerprint of an AI suggestion. Lets us remember per
             // session whether a given card was already applied, so closing
             // and reopening the panel keeps "✓ 已加入" / "✓ 已套用" instead
@@ -3731,13 +3791,27 @@
                 const isCrossDataset = ds !== state.currentDataset;
                 const fp = cardFingerprint('new', ds, obj);
                 const alreadyApplied = isApplied(fp);
+                // Same-dataset only: surface dup warning when LotID + EqpID
+                // overlap an existing case. Cross-dataset edits don't have
+                // a comparable in-memory list, skip.
+                const dups = (!isCrossDataset && !alreadyApplied) ? findDuplicateCases(obj) : [];
+                const hasDup = dups.length > 0;
 
                 const card = document.createElement('div');
-                card.className = 'ai-newcase-card';
+                card.className = 'ai-newcase-card' + (hasDup ? ' has-dup' : '');
                 const title = document.createElement('div');
                 title.className = 'ai-newcase-title';
                 title.textContent = 'AI 建議新增 case  →  ' + dsLabel;
                 card.appendChild(title);
+
+                if (hasDup) {
+                    const warn = document.createElement('div');
+                    warn.className = 'ai-newcase-dup';
+                    const refs = dups.slice(0, 3).map(d => '[#' + d.n + ']').join(', ');
+                    const extra = dups.length > 3 ? ' (+' + (dups.length - 3) + ')' : '';
+                    warn.textContent = '⚠ 偵測到相似的既有 case: ' + refs + extra + '(同 LotID + 同 EqpID)';
+                    card.appendChild(warn);
+                }
 
                 const fields = document.createElement('div');
                 fields.className = 'ai-newcase-fields';
@@ -3845,13 +3919,23 @@
                     }
                 };
 
+                // Reusable dup-confirm gate. Same-dataset only -- cross-dataset
+                // has no in-memory list to compare against.
+                const guardThenAdd = (action) => {
+                    if (hasDup) {
+                        const refs = dups.map(d => '[#' + d.n + ']').join(', ');
+                        const msg = '偵測到既有 case ' + refs + ' 跟這筆的 LotID + EqpID 重複,仍要新增?';
+                        if (!confirm(msg)) return;
+                    }
+                    action();
+                };
                 addBtn.addEventListener('click', () => {
                     if (isCrossDataset) {
                         if (!getAuthUser()) { openLogin(doAddCrossDataset); return; }
                         doAddCrossDataset();
                     } else {
-                        if (state.viewMode && !getAuthUser()) { openLogin(doAddSameDataset); return; }
-                        doAddSameDataset();
+                        if (state.viewMode && !getAuthUser()) { openLogin(() => guardThenAdd(doAddSameDataset)); return; }
+                        guardThenAdd(doAddSameDataset);
                     }
                 });
                 dismissBtn.addEventListener('click', () => card.remove());
