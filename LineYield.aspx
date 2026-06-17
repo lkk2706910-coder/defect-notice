@@ -542,6 +542,20 @@
         td .cell-text { white-space: pre-wrap; word-break: break-word; min-height: 18px; }
         td.editable .cell-text { cursor: text; }
         td.editable .cell-text:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--input-bg); }
+        /* Edit mode: make every editable cell *look* like an input field
+           from the start (border + light bg) so users see immediately
+           where they can type, not only on hover/focus. */
+        body:not(.view-mode) td.editable .cell-text[contenteditable="true"] {
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 3px 6px;
+            background: var(--input-bg);
+            min-height: 22px;
+        }
+        body:not(.view-mode) td.editable .cell-text[contenteditable="true"]:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
 
         /* Cascading dropdown cells (現象1階 / ZE5.0 / ZE 1階 in 少片數) */
         td.cascade-cell select {
