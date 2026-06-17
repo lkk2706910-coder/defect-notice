@@ -1733,6 +1733,20 @@
             ]
         };
 
+        // Back-fill EqpType + Entity on a row from the EqpID lookup table.
+        // Useful after AI-suggested cases drop into state.cases because the
+        // model sometimes guesses the parents wrong; we re-derive them from
+        // the authoritative EQP_DATA map. EqpID may be multi-line, in which
+        // case we take the first line as the lookup key.
+        function backfillEqpParents(c) {
+            if (!c || !c.eqpId) return;
+            const firstLine = String(c.eqpId).split(/\r?\n/)[0].trim();
+            const parent = EQP_DATA.toolToParent[firstLine];
+            if (!parent) return;
+            c.eqpType = parent.eqpType;
+            c.entity  = parent.entity;
+        }
+
         function cascadeOptionsFor(key, c) {
             if (SIMPLE_OPTIONS[key]) return SIMPLE_OPTIONS[key].slice();
             if (key === 'phenomenon1') return CASCADE_DATA.phenomenon1.slice();
@@ -3871,6 +3885,11 @@
                     editableKeys.forEach(k => {
                         c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
                     });
+                    // AI sometimes guesses EqpType / Entity wrong. The EqpID
+                    // we just stored is the authoritative source -- re-derive
+                    // its parents so the row is internally consistent without
+                    // forcing the user to re-click the EqpID cell.
+                    if (ds === 'light') backfillEqpParents(c);
                     state.cases.unshift(c);
                     state.dirtyIds.add(c.id);
                     state.dirty = true;
@@ -3892,6 +3911,7 @@
                     editableKeys.forEach(k => {
                         c[k] = (obj[k] !== undefined && obj[k] !== null) ? String(obj[k]) : '';
                     });
+                    if (ds === 'light') backfillEqpParents(c);
                     addBtn.disabled = true;
                     addBtn.textContent = '加入中...';
                     try {
@@ -4033,6 +4053,12 @@
                     Object.keys(entry.fields).forEach(k => {
                         target[k] = entry.fields[k] == null ? '' : String(entry.fields[k]);
                     });
+                    // Same back-fill protection: if the AI just touched EqpID,
+                    // make sure EqpType / Entity track it without the user
+                    // having to re-click the EqpID cell.
+                    if (ds === 'light' && Object.prototype.hasOwnProperty.call(entry.fields, 'eqpId')) {
+                        backfillEqpParents(target);
+                    }
                     state.dirtyIds.add(target.id);
                     state.dirty = true;
                     renderAll();
