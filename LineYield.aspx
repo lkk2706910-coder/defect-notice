@@ -1506,7 +1506,7 @@
             { key: 'ze50',          label: 'ZE5.0',                kind: 'cascade' },
             { key: 'ze1',           label: 'ZE 1階',               kind: 'cascade' },
             { key: 'onAccount',     label: '掛帳',                  kind: 'checkbox' },
-            { key: 'productType',   label: 'auto or normal 產品' }
+            { key: 'productType',   label: '產品別',                kind: 'cascade' }
         ];
 
         let COLUMNS = COLUMNS_LIGHT;
@@ -1730,7 +1730,8 @@
                 '機台 Process',
                 '機台 Scratch',
                 '機台破片'
-            ]
+            ],
+            productType: ['Auto', 'Normal']
         };
 
         // Back-fill EqpType + Entity on a row from the EqpID lookup table.
@@ -4429,6 +4430,7 @@
                                 '\n   分類/類別 → bulk:category(light 無對應就省略)' +
                                 '\n   Site/廠區/廠別 → bulk:site,**值只能是 12A / 12X / 12i 三選一**(light 無對應就省略)' +
                                 '\n   原因分類 → light:reasonCategory,**值只能是這 6 個之一**:機台 Defect / 機台 Down / 機台 FDC / 機台 Process / 機台 Scratch / 機台破片(bulk 無對應就省略)' +
+                                '\n   產品別/Auto/Normal → light:productType,**值只能是 Auto / Normal 二選一**(首字大寫,bulk 無對應就省略)' +
                                 '\n   掛帳 → light:onAccount,**boolean 欄位**:來源資料(欄位、備註、原因、final action 等任一處)出現「掛帳」二字就填 "1",否則省略或填 ""。bulk 無對應就省略' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
                                 '\n   連結/Link → 兩邊都有 link' +
@@ -4485,10 +4487,10 @@
                                 '\n</edit-case>' +
                                 '\n【範例 3 - 多筆】使用者說「[#5] [#7] 的 productType 都改成 normal」' +
                                 '\n<edit-case id="abc-123-uuid-of-case-5" ds="light">' +
-                                '\n{"productType": "normal"}' +
+                                '\n{"productType": "Normal"}' +
                                 '\n</edit-case>' +
                                 '\n<edit-case id="def-456-uuid-of-case-7" ds="light">' +
-                                '\n{"productType": "normal"}' +
+                                '\n{"productType": "Normal"}' +
                                 '\n</edit-case>' +
                                 '\n\n=============================================' +
                                 '\n【規則 C - 單張圖片(非表格)且使用者沒說要新增】' +
