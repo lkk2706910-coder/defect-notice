@@ -663,6 +663,11 @@
             align-self: flex-start;
         }
         td.multiline-cell .ml-add:hover { background: var(--tint-high); color: var(--text); border-color: var(--accent); }
+        /* Checkbox cell (掛帳) */
+        td.checkbox-cell { text-align: center; min-width: 70px !important; }
+        td.checkbox-cell .cb-wrap { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 4px 8px; }
+        td.checkbox-cell .cb-input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); margin: 0; }
+        td.checkbox-cell .checkbox-ro { text-align: center; font-size: 16px; color: var(--text); }
         /* contenteditable placeholder for empty cells */
         td .cell-text[data-placeholder]:empty::before {
             content: attr(data-placeholder);
@@ -1490,6 +1495,7 @@
             { key: 'phenomenon1',   label: '現象1階',              kind: 'cascade' },
             { key: 'ze50',          label: 'ZE5.0',                kind: 'cascade' },
             { key: 'ze1',           label: 'ZE 1階',               kind: 'cascade' },
+            { key: 'onAccount',     label: '掛帳',                  kind: 'checkbox' },
             { key: 'productType',   label: 'auto or normal 產品' }
         ];
 
@@ -2146,6 +2152,35 @@
                         });
                         td.innerHTML = '';
                         td.appendChild(select);
+                    }
+                } else if (col.kind === 'checkbox') {
+                    // Boolean checkbox cell (e.g. 掛帳). Storage is the string
+                    // "1" / "" so it serializes the same as text columns and
+                    // existing sort/filter/export paths just work.
+                    td.className = 'editable checkbox-cell';
+                    const raw = c[col.key];
+                    const checked = raw === true || raw === 1 || raw === '1'
+                        || raw === 'true' || raw === 'yes' || raw === '掛帳';
+                    if (state.viewMode) {
+                        td.innerHTML = '<div class="cell-text checkbox-ro">' + (checked ? '☑' : '☐') + '</div>';
+                    } else {
+                        const wrap = document.createElement('label');
+                        wrap.className = 'cb-wrap';
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.className = 'cb-input';
+                        cb.checked = checked;
+                        cb.setAttribute('data-key', col.key);
+                        cb.addEventListener('change', () => {
+                            const newVal = cb.checked ? '1' : '';
+                            if (newVal !== (c[col.key] || '')) {
+                                c[col.key] = newVal;
+                                markDirty(c.id);
+                            }
+                        });
+                        wrap.appendChild(cb);
+                        td.innerHTML = '';
+                        td.appendChild(wrap);
                     }
                 } else if (col.kind === 'multiline') {
                     // Multi-value cell (LotID / Qty in 少片數). Each line is
@@ -3659,6 +3694,31 @@
                 }
                 return out;
             }
+            // Stable fingerprint of an AI suggestion. Lets us remember per
+            // session whether a given card was already applied, so closing
+            // and reopening the panel keeps "✓ 已加入" / "✓ 已套用" instead
+            // of reverting the button back to its blue initial state.
+            function cardFingerprint(prefix, ds, payload) {
+                try { return prefix + ':' + ds + ':' + JSON.stringify(payload); }
+                catch (e) { return prefix + ':' + ds + ':' + String(payload); }
+            }
+            function getAppliedSet(sess) {
+                if (!sess) return null;
+                if (!Array.isArray(sess.appliedCards)) sess.appliedCards = [];
+                return sess.appliedCards;
+            }
+            function isApplied(fp) {
+                const s = getActive();
+                const arr = getAppliedSet(s);
+                return arr ? arr.indexOf(fp) >= 0 : false;
+            }
+            function markApplied(fp) {
+                const s = getActive();
+                const arr = getAppliedSet(s);
+                if (!arr || arr.indexOf(fp) >= 0) return;
+                arr.push(fp);
+                saveSessions();
+            }
             // Render a "preview + 加入" card for one AI-suggested case.
             function appendNewCaseCard(entry) {
                 // Accept both legacy plain-obj entries and the new {ds, obj}
@@ -3669,6 +3729,8 @@
                 const editableKeys = targetCols.filter(c => c.kind !== 'img').map(c => c.key);
                 const dsLabel = ds === 'bulk' ? 'Lesson Learn' : 'Line Yield';
                 const isCrossDataset = ds !== state.currentDataset;
+                const fp = cardFingerprint('new', ds, obj);
+                const alreadyApplied = isApplied(fp);
 
                 const card = document.createElement('div');
                 card.className = 'ai-newcase-card';
@@ -3705,7 +3767,17 @@
                 const addBtn = document.createElement('button');
                 addBtn.type = 'button';
                 addBtn.className = 'ai-newcase-add';
-                if (isViewer()) {
+                const dismissBtn = document.createElement('button');
+                dismissBtn.type = 'button';
+                dismissBtn.className = 'ai-newcase-dismiss';
+                dismissBtn.textContent = '忽略';
+                if (alreadyApplied) {
+                    addBtn.textContent = isCrossDataset
+                        ? '✓ 已加入到 ' + dsLabel
+                        : '✓ 已加入,記得按儲存';
+                    addBtn.disabled = true;
+                    dismissBtn.style.display = 'none';
+                } else if (isViewer()) {
                     addBtn.textContent = '無權限編輯';
                     addBtn.disabled = true;
                 } else if (isCrossDataset) {
@@ -3713,10 +3785,6 @@
                 } else {
                     addBtn.textContent = state.viewMode ? '切到編輯並加入' : '加入表格';
                 }
-                const dismissBtn = document.createElement('button');
-                dismissBtn.type = 'button';
-                dismissBtn.className = 'ai-newcase-dismiss';
-                dismissBtn.textContent = '忽略';
                 actions.appendChild(addBtn);
                 actions.appendChild(dismissBtn);
                 card.appendChild(actions);
@@ -3739,6 +3807,7 @@
                     addBtn.textContent = '✓ 已加入,記得按儲存';
                     addBtn.disabled = true;
                     dismissBtn.style.display = 'none';
+                    markApplied(fp);
                 };
 
                 // Cross-dataset path: send the row straight to the target file
@@ -3762,6 +3831,7 @@
                             addBtn.textContent = '✓ 已加入到 ' + dsLabel;
                             dismissBtn.style.display = 'none';
                             setStatus('已加入 1 筆到 ' + dsLabel + '(可切到該分頁查看)', 'saved');
+                            markApplied(fp);
                         } else {
                             addBtn.disabled = false;
                             addBtn.textContent = '加入失敗,再試';
@@ -3821,6 +3891,8 @@
                 const isCrossDataset = ds !== state.currentDataset;
                 const target = state.cases.find(c => c.id === entry.id);
                 const dsLabel = ds === 'bulk' ? 'Lesson Learn' : 'Line Yield';
+                const fp = cardFingerprint('edit', ds, { id: entry.id, fields: entry.fields });
+                const alreadyApplied = isApplied(fp);
 
                 const card = document.createElement('div');
                 card.className = 'ai-newcase-card';
@@ -3856,7 +3928,11 @@
                 dismissBtn.className = 'ai-newcase-dismiss';
                 dismissBtn.textContent = '忽略';
 
-                if (isViewer()) {
+                if (alreadyApplied) {
+                    applyBtn.textContent = '✓ 已套用,記得按儲存';
+                    applyBtn.disabled = true;
+                    dismissBtn.style.display = 'none';
+                } else if (isViewer()) {
                     applyBtn.textContent = '無權限編輯';
                     applyBtn.disabled = true;
                 } else if (!target) {
@@ -3881,6 +3957,7 @@
                     applyBtn.textContent = '✓ 已套用,記得按儲存';
                     applyBtn.disabled = true;
                     dismissBtn.style.display = 'none';
+                    markApplied(fp);
                 };
 
                 applyBtn.addEventListener('click', () => {
@@ -4242,6 +4319,7 @@
                                 '\n   分類/類別 → bulk:category(light 無對應就省略)' +
                                 '\n   Site/廠區/廠別 → bulk:site,**值只能是 12A / 12X / 12i 三選一**(light 無對應就省略)' +
                                 '\n   原因分類 → light:reasonCategory,**值只能是這 6 個之一**:機台 Defect / 機台 Down / 機台 FDC / 機台 Process / 機台 Scratch / 機台破片(bulk 無對應就省略)' +
+                                '\n   掛帳 → light:onAccount,**boolean 欄位**:來源資料(欄位、備註、原因、final action 等任一處)出現「掛帳」二字就填 "1",否則省略或填 ""。bulk 無對應就省略' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
                                 '\n   連結/Link → 兩邊都有 link' +
                                 '\n   Lot ID/批號 → light:lotId(bulk 無對應就省略)。**多個批號用 \\n 換行分開**,例如 "GTC5Q.26\\nGTC5Q.22\\nGTC5Q.29"' +
