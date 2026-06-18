@@ -1754,6 +1754,11 @@
         // row when the value lands so the cell updates without the user
         // having to interact.
         const _reasonLookupInflight = new Set();
+        // Once we've asked the DB about (caseId, firstLot) we don't ask
+        // again -- empty results are valid answers (the lot isn't in the
+        // table) and re-firing on every re-render would hammer the endpoint.
+        // Resets when LotID is edited (different firstLot => different key).
+        const _reasonLookupTried = new Set();
         async function maybeAutoFillReasonByLot(c) {
             if (!c || !c.lotId) return;
             if (c.reasonCategory) return; // never overwrite an existing value
@@ -1761,7 +1766,9 @@
             if (!firstLot) return;
             const flightKey = c.id + ':' + firstLot;
             if (_reasonLookupInflight.has(flightKey)) return;
+            if (_reasonLookupTried.has(flightKey)) return;
             _reasonLookupInflight.add(flightKey);
+            _reasonLookupTried.add(flightKey);
             try {
                 const res = await authFetch(
                     'LineYield.aspx?op=lookupReason&lot=' + encodeURIComponent(firstLot),
@@ -2143,6 +2150,16 @@
                     // 3-level cascading dropdown (現象1階 -> ZE5.0 -> ZE 1階,
                     // and EqpType -> Entity -> EqpID).
                     // In view-only mode just print the value as text.
+                    // Side-effect: when 原因分類 renders empty and LotID is
+                    // set on light dataset, kick off a DB lookup once. We
+                    // gate by (caseId, firstLot) so re-renders don't spam
+                    // the endpoint. Refreshes when LotID changes.
+                    if (col.key === 'reasonCategory'
+                        && state.currentDataset === 'light'
+                        && !c.reasonCategory
+                        && c.lotId) {
+                        setTimeout(() => maybeAutoFillReasonByLot(c), 0);
+                    }
                     td.className = 'editable cascade-cell';
                     const v = c[col.key] || '';
                     if (state.viewMode) {
