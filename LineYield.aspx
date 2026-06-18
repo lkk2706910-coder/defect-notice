@@ -1748,6 +1748,49 @@
             productType: ['Auto', 'Normal']
         };
 
+        // Look up LOSSREASON for a row's first LotID against the GPTPoCDB
+        // and fill reasonCategory if it's still empty. No-op if LotID is
+        // blank, multiple lots collapse to the first line. We re-render the
+        // row when the value lands so the cell updates without the user
+        // having to interact.
+        const _reasonLookupInflight = new Set();
+        async function maybeAutoFillReasonByLot(c) {
+            if (!c || !c.lotId) return;
+            if (c.reasonCategory) return; // never overwrite an existing value
+            const firstLot = String(c.lotId).split(/\r?\n/).map(s => s.trim()).filter(Boolean)[0];
+            if (!firstLot) return;
+            const flightKey = c.id + ':' + firstLot;
+            if (_reasonLookupInflight.has(flightKey)) return;
+            _reasonLookupInflight.add(flightKey);
+            try {
+                const res = await authFetch(
+                    'LineYield.aspx?op=lookupReason&lot=' + encodeURIComponent(firstLot),
+                    { cache: 'no-store' }
+                );
+                const data = await res.json();
+                if (!data || !data.ok) return;
+                const reasons = Array.isArray(data.reasons) ? data.reasons.filter(Boolean) : [];
+                if (reasons.length === 0) return;
+                // User may have typed something in the cell between issuing
+                // the request and the response -- re-check we still want to
+                // fill.
+                if (c.reasonCategory) return;
+                c.reasonCategory = String(reasons[0]);
+                markDirty(c.id);
+                // Re-render this row so the dropdown shows the new value.
+                const tr = document.querySelector('tr[data-id="' + c.id + '"]');
+                if (tr) {
+                    const newTr = renderRow(c);
+                    tr.replaceWith(newTr);
+                }
+            } catch (e) {
+                // Silently swallow -- this is a convenience auto-fill, not
+                // a critical save.
+            } finally {
+                _reasonLookupInflight.delete(flightKey);
+            }
+        }
+
         // Back-fill EqpType + Entity on a row from the EqpID lookup table.
         // Useful after AI-suggested cases drop into state.cases because the
         // model sometimes guesses the parents wrong; we re-derive them from
@@ -2243,9 +2286,17 @@
                             const trimmed = lines.slice();
                             while (trimmed.length > 1 && trimmed[trimmed.length - 1] === '') trimmed.pop();
                             const joined = trimmed.join('\n');
-                            if (joined !== (c[col.key] || '')) {
+                            const changed = joined !== (c[col.key] || '');
+                            if (changed) {
                                 c[col.key] = joined;
                                 markDirty(c.id);
+                            }
+                            // LotID just changed -> trigger the LOSSREASON DB
+                            // lookup so 原因分類 can auto-fill. Light dataset
+                            // only; only when reasonCategory is still empty
+                            // so we don't clobber a user-edited value.
+                            if (changed && col.key === 'lotId' && state.currentDataset === 'light' && !c.reasonCategory) {
+                                maybeAutoFillReasonByLot(c);
                             }
                         };
                         const render = () => {
@@ -3906,6 +3957,12 @@
                     // forcing the user to re-click the EqpID cell.
                     if (ds === 'light') backfillEqpParents(c);
                     state.cases.unshift(c);
+                    // After the row is in state.cases / rendered, kick a
+                    // DB lookup to fill 原因分類 from LotID. Fire-and-forget;
+                    // the helper re-renders the row when the value arrives.
+                    if (ds === 'light' && c.lotId && !c.reasonCategory) {
+                        setTimeout(() => maybeAutoFillReasonByLot(c), 0);
+                    }
                     state.dirtyIds.add(c.id);
                     state.dirty = true;
                     state.filters = {};

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Data.SqlClient;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
@@ -100,6 +101,10 @@ public partial class LineYield : System.Web.UI.Page
             else if (string.Equals(op, "chat", StringComparison.OrdinalIgnoreCase))
             {
                 if (RequireAuth()) HandleChat();
+            }
+            else if (string.Equals(op, "lookupReason", StringComparison.OrdinalIgnoreCase))
+            {
+                if (RequireAuth()) HandleLookupReason();
             }
             else
             {
@@ -269,6 +274,66 @@ public partial class LineYield : System.Web.UI.Page
         }
         AppendAuditLog(editedBy, "delete", new List<string> { id }, deletedSnapshots);
         Response.Write("{\"ok\":true}");
+    }
+
+    // ---- LOSSREASON lookup ----
+    // Client GETs ?op=lookupReason&lot=XYZ. We query GPTPoCDB for any
+    // matching LOT rows and return DISTINCT LOSSREASON values. The client
+    // uses this to auto-populate the reasonCategory field for a case.
+    // Connection string lives in web.config (<connectionStrings GPTPoCDB>);
+    // missing connection string returns a 500 with a clear error.
+    private void HandleLookupReason()
+    {
+        string lot = Request.QueryString["lot"];
+        if (string.IsNullOrWhiteSpace(lot))
+        {
+            Response.Write("{\"ok\":true,\"reasons\":[]}");
+            return;
+        }
+        var connSettings = ConfigurationManager.ConnectionStrings["GPTPoCDB"];
+        if (connSettings == null || string.IsNullOrEmpty(connSettings.ConnectionString))
+        {
+            Response.StatusCode = 500;
+            Response.Write("{\"ok\":false,\"error\":\"connection string 'GPTPoCDB' missing from web.config\"}");
+            return;
+        }
+        var reasons = new List<string>();
+        try
+        {
+            using (var conn = new SqlConnection(connSettings.ConnectionString))
+            using (var cmd = new SqlCommand(
+                "SELECT DISTINCT LOSSREASON FROM [GPTPoCDB].[dbo].[Notes_Scrap_RawCat] WHERE LOT = @p0", conn))
+            {
+                cmd.Parameters.AddWithValue("@p0", lot.Trim());
+                cmd.CommandTimeout = 10;
+                conn.Open();
+                using (var rdr = cmd.ExecuteReader())
+                {
+                    while (rdr.Read())
+                    {
+                        if (!rdr.IsDBNull(0))
+                        {
+                            string val = rdr.GetValue(0).ToString();
+                            if (!string.IsNullOrWhiteSpace(val)) reasons.Add(val.Trim());
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Response.StatusCode = 500;
+            Response.Write("{\"ok\":false,\"error\":\"" + JsonEscape(ex.Message) + "\"}");
+            return;
+        }
+        var ser = NewSerializer();
+        var payload = new Dictionary<string, object>
+        {
+            { "ok", true },
+            { "lot", lot.Trim() },
+            { "reasons", reasons }
+        };
+        Response.Write(ser.Serialize(payload));
     }
 
     // ---- AI assistant proxy ----
