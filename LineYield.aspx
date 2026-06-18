@@ -1743,7 +1743,7 @@
                 '機台 FDC',
                 '機台 Process',
                 '機台 Scratch',
-                '機台破片'
+                '機台 破片'
             ],
             productType: ['Auto', 'Normal']
         };
@@ -4517,7 +4517,7 @@
                                 '\n   零件/Parts → 兩邊都有 parts' +
                                 '\n   分類/類別 → bulk:category(light 無對應就省略)' +
                                 '\n   Site/廠區/廠別 → bulk:site,**值只能是 12A / 12X / 12i 三選一**(light 無對應就省略)' +
-                                '\n   原因分類 → light:reasonCategory,**值只能是這 6 個之一**:機台 Defect / 機台 Down / 機台 FDC / 機台 Process / 機台 Scratch / 機台破片(bulk 無對應就省略)' +
+                                '\n   原因分類 → light:reasonCategory,**值只能是這 6 個之一**:機台 Defect / 機台 Down / 機台 FDC / 機台 Process / 機台 Scratch / 機台 破片(bulk 無對應就省略)' +
                                 '\n   產品別/Auto/Normal → light:productType,**值只能是 Auto / Normal 二選一**(首字大寫,bulk 無對應就省略)' +
                                 '\n   掛帳 → light:onAccount,**boolean 欄位**:來源資料(欄位、備註、原因、final action 等任一處)出現「掛帳」二字就填 "1",否則省略或填 ""。bulk 無對應就省略' +
                                 '\n   世代/Generation → 兩邊都有 generation' +
