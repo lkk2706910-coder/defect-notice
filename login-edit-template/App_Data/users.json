@@ -1,0 +1,26 @@
+{
+  "_README": [
+    "Sample users for the login-edit-template. NEVER ship real production",
+    "users.json -- generate the real one on the deployment box with",
+    "tools/user_hash.py and put it in this exact path (App_Data/users.json)",
+    "next to the .aspx files.",
+    "",
+    "Default credentials below (CHANGE THEM after first deploy):",
+    "  admin  / admin123    (role: editor, can mutate)",
+    "  reader / reader123   (role: viewer, can only read)"
+  ],
+  "users": [
+    {
+      "name": "admin",
+      "salt": "Z3w5VxS1bDqL_p2C",
+      "hash": "Iaq+VgmFitrL2zDKvnGKOtuiOhwsF5QPyhX7v1Zp+P0=",
+      "role": "editor"
+    },
+    {
+      "name": "reader",
+      "salt": "m8K_aRq7gNL4Tj9Y",
+      "hash": "ddkgvMYIQEgSlYzqTQHKUluMVTN3zauHHOZE9weZBGQ=",
+      "role": "viewer"
+    }
+  ]
+}
