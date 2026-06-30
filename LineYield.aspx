@@ -1799,56 +1799,6 @@
             }
         }
 
-        // Auto-tick the 大宗 checkbox for a row by checking its LotID(s)
-        // against GPTPoCDB. A lot is 大宗 (bulk scrap) when it carries any
-        // ScrapCat_Module other than the small "A.<5 pcs" category (non-A).
-        // We OR across every LotID line; the first non-A hit ticks the box.
-        // Mirrors the LOSSREASON auto-fill: never un-ticks (so a user edit is
-        // safe), only fills when the box is still empty, and gates by
-        // (caseId, lot-signature) so re-renders don't hammer the endpoint.
-        const _bulkLookupInflight = new Set();
-        const _bulkLookupTried = new Set();
-        async function maybeAutoFillBulkByLot(c) {
-            if (!c || !c.lotId) return;
-            if (c.bulk) return; // already ticked -> nothing to do
-            const lots = String(c.lotId).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-            if (lots.length === 0) return;
-            const sig = lots.join('|');
-            const flightKey = c.id + ':' + sig;
-            if (_bulkLookupInflight.has(flightKey)) return;
-            if (_bulkLookupTried.has(flightKey)) return;
-            _bulkLookupInflight.add(flightKey);
-            _bulkLookupTried.add(flightKey);
-            try {
-                let isBulk = false;
-                for (const lot of lots) {
-                    const res = await authFetch(
-                        'LineYield.aspx?op=lookupScrapCat&lot=' + encodeURIComponent(lot),
-                        { cache: 'no-store' }
-                    );
-                    const data = await res.json();
-                    if (!data || !data.ok) continue;
-                    const cats = Array.isArray(data.cats) ? data.cats.filter(Boolean) : [];
-                    // 大宗 = any non-"A.<5 pcs" (non-A) ScrapCat_Module value.
-                    if (cats.some(v => !/^\s*A/i.test(String(v)))) { isBulk = true; break; }
-                }
-                if (!isBulk) return;
-                if (c.bulk) return; // user may have ticked it meanwhile
-                c.bulk = '1';
-                markDirty(c.id);
-                // Re-render this row so the checkbox shows the new value.
-                const tr = document.querySelector('tr[data-id="' + c.id + '"]');
-                if (tr) {
-                    const newTr = renderRow(c);
-                    tr.replaceWith(newTr);
-                }
-            } catch (e) {
-                // Silently swallow -- convenience auto-tick, not a critical save.
-            } finally {
-                _bulkLookupInflight.delete(flightKey);
-            }
-        }
-
         // Back-fill EqpType + Entity on a row from the EqpID lookup table.
         // Useful after AI-suggested cases drop into state.cases because the
         // model sometimes guesses the parents wrong; we re-derive them from
@@ -2304,18 +2254,9 @@
                         td.appendChild(select);
                     }
                 } else if (col.kind === 'checkbox') {
-                    // Boolean checkbox cell (e.g. 掛帳). Storage is the string
-                    // "1" / "" so it serializes the same as text columns and
-                    // existing sort/filter/export paths just work.
-                    // Side-effect: when 大宗 renders empty and LotID is set on
-                    // the light dataset, kick off a DB lookup once to auto-tick
-                    // it. Gated per (caseId, lot) so re-renders don't spam.
-                    if (col.key === 'bulk'
-                        && state.currentDataset === 'light'
-                        && !c.bulk
-                        && c.lotId) {
-                        setTimeout(() => maybeAutoFillBulkByLot(c), 0);
-                    }
+                    // Boolean checkbox cell (e.g. 掛帳, 大宗). Storage is the
+                    // string "1" / "" so it serializes the same as text columns
+                    // and existing sort/filter/export paths just work.
                     td.className = 'editable checkbox-cell';
                     const raw = c[col.key];
                     const checked = raw === true || raw === 1 || raw === '1'
@@ -2374,12 +2315,6 @@
                             // so we don't clobber a user-edited value.
                             if (changed && col.key === 'lotId' && state.currentDataset === 'light' && !c.reasonCategory) {
                                 maybeAutoFillReasonByLot(c);
-                            }
-                            // LotID just changed -> also re-evaluate the 大宗
-                            // checkbox from ScrapCat_Module. Light dataset only;
-                            // skips if the box is already ticked.
-                            if (changed && col.key === 'lotId' && state.currentDataset === 'light' && !c.bulk) {
-                                maybeAutoFillBulkByLot(c);
                             }
                         };
                         const render = () => {

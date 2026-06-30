@@ -106,10 +106,6 @@ public partial class LineYield : System.Web.UI.Page
             {
                 if (RequireAuth()) HandleLookupReason();
             }
-            else if (string.Equals(op, "lookupScrapCat", StringComparison.OrdinalIgnoreCase))
-            {
-                if (RequireAuth()) HandleLookupScrapCat();
-            }
             else
             {
                 Response.StatusCode = 400;
@@ -336,69 +332,6 @@ public partial class LineYield : System.Web.UI.Page
             { "ok", true },
             { "lot", lot.Trim() },
             { "reasons", reasons }
-        };
-        Response.Write(ser.Serialize(payload));
-    }
-
-    // ---- ScrapCat_Module lookup (大宗 checkbox) ----
-    // Client GETs ?op=lookupScrapCat&lot=XYZ. We query GPTPoCDB for any
-    // matching LOT rows and return the DISTINCT ScrapCat_Module values. The
-    // client uses these to auto-tick the 大宗 checkbox: a lot counts as 大宗
-    // (bulk scrap) when it carries any ScrapCat_Module other than the small
-    // "A.<5 pcs" category (i.e. a non-A category). Filtering to non-A is left
-    // to the client so the rule stays easy to tune in one place.
-    // Connection string lives in web.config (<connectionStrings GPTPoCDB>);
-    // missing connection string returns a 500 with a clear error.
-    private void HandleLookupScrapCat()
-    {
-        string lot = Request.QueryString["lot"];
-        if (string.IsNullOrWhiteSpace(lot))
-        {
-            Response.Write("{\"ok\":true,\"cats\":[]}");
-            return;
-        }
-        var connSettings = ConfigurationManager.ConnectionStrings["GPTPoCDB"];
-        if (connSettings == null || string.IsNullOrEmpty(connSettings.ConnectionString))
-        {
-            Response.StatusCode = 500;
-            Response.Write("{\"ok\":false,\"error\":\"connection string 'GPTPoCDB' missing from web.config\"}");
-            return;
-        }
-        var cats = new List<string>();
-        try
-        {
-            using (var conn = new SqlConnection(connSettings.ConnectionString))
-            using (var cmd = new SqlCommand(
-                "SELECT DISTINCT ScrapCat_Module FROM [GPTPoCDB].[dbo].[Notes_Scrap_RawCat] WHERE LOT = @p0", conn))
-            {
-                cmd.Parameters.AddWithValue("@p0", lot.Trim());
-                cmd.CommandTimeout = 10;
-                conn.Open();
-                using (var rdr = cmd.ExecuteReader())
-                {
-                    while (rdr.Read())
-                    {
-                        if (!rdr.IsDBNull(0))
-                        {
-                            string val = rdr.GetValue(0).ToString();
-                            if (!string.IsNullOrWhiteSpace(val)) cats.Add(val.Trim());
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Response.StatusCode = 500;
-            Response.Write("{\"ok\":false,\"error\":\"" + JsonEscape(ex.Message) + "\"}");
-            return;
-        }
-        var ser = NewSerializer();
-        var payload = new Dictionary<string, object>
-        {
-            { "ok", true },
-            { "lot", lot.Trim() },
-            { "cats", cats }
         };
         Response.Write(ser.Serialize(payload));
     }
