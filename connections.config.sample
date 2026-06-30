@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy this file to `connections.config` and fill in the real values.
+  `connections.config` is gitignored and MUST NOT be committed.
+-->
+<connectionStrings>
+  <add name="DefectDb"
+       connectionString="Server=<your-sql-server>;Database=<your-db>;User Id=<your-user>;Password=<your-password>;"
+       providerName="System.Data.SqlClient" />
+</connectionStrings>

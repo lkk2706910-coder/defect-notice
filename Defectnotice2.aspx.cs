@@ -1,4 +1,5 @@
 using System;
+using System.Configuration;
 using System.Data.SqlClient;
 using System.Text;
 using System.Web.UI.WebControls;
@@ -46,7 +47,14 @@ public partial class GPTPoCDB_SampleSite_NotesTable : System.Web.UI.Page
 
     protected void Page_Load(object sender, EventArgs e)
     {
-        string connStr = "Server=UMCESIDB02;Database=GPTPoCDB;User Id=GPTPoCDBUser;Password=DB02.2026;";
+        // 連線字串由 web.config -> connections.config 提供（gitignored）。
+        var connSetting = ConfigurationManager.ConnectionStrings["DefectDb"];
+        if (connSetting == null || string.IsNullOrEmpty(connSetting.ConnectionString))
+        {
+            throw new ConfigurationErrorsException("Missing connectionStrings[\"DefectDb\"]. " +
+                "Copy connections.config.sample to connections.config and fill in the real value.");
+        }
+        string connStr = connSetting.ConnectionString;
 
                 // 依需求：機群（NISACVD/SACVD）
         string sql = @"
