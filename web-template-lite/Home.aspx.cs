@@ -43,6 +43,10 @@ public partial class Home : Page
         string url = ConfigurationManager.AppSettings["AiGatewayUrl"];
         string apiKey = ConfigurationManager.AppSettings["AiApiKey"];
         string userId = ConfigurationManager.AppSettings["AiUserId"];
+        // New gateway routes by the "model" field in the JSON body instead of
+        // a model name in the URL path. Configured via appSettings AiModel;
+        // when it is empty we simply do not send the field.
+        string model = ConfigurationManager.AppSettings["AiModel"];
         string systemPrompt = ConfigurationManager.AppSettings["AiSystemPrompt"];
         if (string.IsNullOrEmpty(systemPrompt)) systemPrompt = "You are a helpful assistant.";
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(apiKey))
@@ -73,7 +77,16 @@ public partial class Home : Page
                 if (m != null) messages.Add(m);
         }
         var payload = new Dictionary<string, object> { { "messages", messages } };
+        // New gateway selects the model from the body; add it only when set.
+        if (!string.IsNullOrEmpty(model)) payload["model"] = model;
         byte[] payloadBytes = Encoding.UTF8.GetBytes(ser.Serialize(payload));
+
+        // New gateway is HTTPS with Windows integrated auth. Older .NET
+        // Framework does not enable TLS 1.2 by default, which surfaces as
+        // "The request was aborted: Could not create SSL/TLS secure channel".
+        // Enable TLS 1.2 (and TLS 1.3 when the OS supports it) before the call.
+        try { ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; } catch { }   // TLS 1.2
+        try { ServicePointManager.SecurityProtocol |= (SecurityProtocolType)12288; } catch { }  // TLS 1.3 (skip if unsupported)
 
         var hreq = (HttpWebRequest)WebRequest.Create(url);
         hreq.Method = "POST";
@@ -81,6 +94,11 @@ public partial class Home : Page
         hreq.ContentType = "application/json";
         hreq.Headers["api-key"] = apiKey;
         if (!string.IsNullOrEmpty(userId)) hreq.Headers["user-id"] = userId;
+        // New gateway uses Windows integrated auth (Negotiate/NTLM). Send the
+        // server's own identity (the App Pool account) so the gateway does not
+        // reply 401 and trigger a browser credential prompt.
+        hreq.UseDefaultCredentials = true;
+        hreq.PreAuthenticate = true;
         hreq.Timeout = 120000;
         hreq.ReadWriteTimeout = 120000;
         hreq.ContentLength = payloadBytes.Length;
@@ -106,7 +124,12 @@ public partial class Home : Page
                 }
                 catch { }
             }
-            Response.StatusCode = status;
+            // Never pass a 401/407 straight back to the browser: if we do, IIS
+            // appends a Negotiate challenge (WWW-Authenticate) to the outgoing
+            // response and the browser pops a Windows login box. Remap those to
+            // 502 so no challenge is added; the real status/error still travel
+            // in the JSON error/detail fields below.
+            Response.StatusCode = (status == 401 || status == 407) ? 502 : status;
             Response.Write("{\"ok\":false,\"error\":\"" + JsonEscape(wex.Message) + "\",\"detail\":" + ser.Serialize(detail) + "}");
         }
     }
