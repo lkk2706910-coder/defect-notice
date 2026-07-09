@@ -212,6 +212,10 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         string url = ConfigurationManager.AppSettings["AiGatewayUrl"];
         string apiKey = ConfigurationManager.AppSettings["AiApiKey"];
         string userId = ConfigurationManager.AppSettings["AiUserId"];
+        // New gateway routes by the "model" field in the JSON body instead of
+        // a model name in the URL path. Configured via appSettings AiModel;
+        // when it is empty we simply do not send the field.
+        string model = ConfigurationManager.AppSettings["AiModel"];
         string systemPrompt = ConfigurationManager.AppSettings["AiSystemPrompt"];
         // Fallback prompt kept ASCII-only so this source file is encoding-safe.
         // The real Chinese prompt lives in web.config (<appSettings AiSystemPrompt>).
@@ -254,15 +258,28 @@ public partial class DefectLessonLearn : System.Web.UI.Page
         }
 
         var payload = new Dictionary<string, object> { { "messages", messages } };
+        // New gateway selects the model from the body; add it only when set.
+        if (!string.IsNullOrEmpty(model)) payload["model"] = model;
         byte[] payloadBytes = System.Text.Encoding.UTF8.GetBytes(ser.Serialize(payload));
 
-        // Allow plain HTTP to a non-DNS internal IP without strict cert/SNI hassles.
+        // New gateway is HTTPS with Windows integrated auth. Older .NET
+        // Framework does not enable TLS 1.2 by default, which surfaces as
+        // "The request was aborted: Could not create SSL/TLS secure channel".
+        // Enable TLS 1.2 (and TLS 1.3 when the OS supports it) before the call.
+        try { ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; } catch { }   // TLS 1.2
+        try { ServicePointManager.SecurityProtocol |= (SecurityProtocolType)12288; } catch { }  // TLS 1.3 (skip if unsupported)
+
         var req = (HttpWebRequest)WebRequest.Create(url);
         req.Method = "POST";
         req.Accept = "*/*";
         req.ContentType = "application/json";
         req.Headers["api-key"] = apiKey;
         if (!string.IsNullOrEmpty(userId)) req.Headers["user-id"] = userId;
+        // New gateway uses Windows integrated auth (Negotiate/NTLM). Send the
+        // server's own identity (the App Pool account) so the gateway does not
+        // reply 401 and trigger a browser credential prompt.
+        req.UseDefaultCredentials = true;
+        req.PreAuthenticate = true;
         req.Timeout = 120000;          // 2 min: LLM responses can be slow
         req.ReadWriteTimeout = 120000;
         req.ContentLength = payloadBytes.Length;
@@ -291,7 +308,12 @@ public partial class DefectLessonLearn : System.Web.UI.Page
                 }
                 catch { }
             }
-            Response.StatusCode = status;
+            // Never pass a 401/407 straight back to the browser: if we do, IIS
+            // appends a Negotiate challenge (WWW-Authenticate) to the outgoing
+            // response and the browser pops a Windows login box. Remap those to
+            // 502 so no challenge is added; the real status/error still travel
+            // in the JSON error/detail fields below.
+            Response.StatusCode = (status == 401 || status == 407) ? 502 : status;
             Response.Write("{\"ok\":false,\"error\":\"" + JsonEscape(wex.Message) + "\",\"detail\":" + ser.Serialize(detail) + "}");
         }
     }
