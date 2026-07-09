@@ -393,6 +393,26 @@ public partial class LineYield : System.Web.UI.Page
         var payload = new Dictionary<string, object> { { "messages", messages } };
         // New gateway selects the model from the body; add it only when set.
         if (!string.IsNullOrEmpty(model)) payload["model"] = model;
+        // Optional generation params (web.config). Each is added only when set
+        // and parseable; left blank the gateway uses its own default. Parsed
+        // with InvariantCulture so "0.7" is not misread under a comma locale.
+        // "stream" is intentionally not supported: this proxy buffers the whole
+        // response and returns it as one JSON body, so streaming would break
+        // the response contract the browser expects.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string tempStr = ConfigurationManager.AppSettings["AiTemperature"];
+        string maxTokStr = ConfigurationManager.AppSettings["AiMaxTokens"];
+        string topPStr = ConfigurationManager.AppSettings["AiTopP"];
+        double dnum; int inum;
+        if (!string.IsNullOrEmpty(tempStr) &&
+            double.TryParse(tempStr, System.Globalization.NumberStyles.Float, inv, out dnum))
+            payload["temperature"] = dnum;
+        if (!string.IsNullOrEmpty(maxTokStr) &&
+            int.TryParse(maxTokStr, System.Globalization.NumberStyles.Integer, inv, out inum))
+            payload["max_tokens"] = inum;
+        if (!string.IsNullOrEmpty(topPStr) &&
+            double.TryParse(topPStr, System.Globalization.NumberStyles.Float, inv, out dnum))
+            payload["top_p"] = dnum;
         byte[] payloadBytes = System.Text.Encoding.UTF8.GetBytes(ser.Serialize(payload));
 
         // New gateway is HTTPS with Windows integrated auth. Older .NET
